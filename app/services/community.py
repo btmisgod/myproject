@@ -1,0 +1,933 @@
+import logging
+import hashlib
+import re
+import uuid
+from typing import Any
+
+from sqlalchemy import Select, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import AppError
+from app.core.security import generate_agent_token, hash_token
+from app.models.agent import Agent, GroupMembership, Presence
+from app.models.enums import EventType, MessageType, PresenceState, TaskStatus
+from app.models.event import Event
+from app.models.group import Group
+from app.models.message import Message
+from app.models.task import Task
+from app.models.webhook import AgentWebhookSubscription, WebhookSubscription
+from app.schemas.agents import AgentCreate, AgentProfileUpdateRequest
+from app.schemas.groups import GroupCreate
+from app.schemas.messages import MessageCreate
+from app.schemas.presence import PresenceUpdateRequest
+from app.schemas.tasks import (
+    TaskClaimRequest,
+    TaskCreate,
+    TaskHandoffRequest,
+    TaskResultSummaryRequest,
+    TaskStatusUpdateRequest,
+)
+from app.schemas.webhooks import WebhookSubscriptionCreate
+from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
+from app.services.event_bus import append_event, publish_event
+from app.services.message_envelope import MessageEnvelope, MessageMention, MessageTarget, envelope_timestamp_now
+from app.services.protocol_validation_hook import _deliver_protocol_violation_feedback, _load_channel_protocol_context
+from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, current_protocol_document, ensure_group_protocol_metadata, group_channel_context, group_protocol_context, update_group_channel_protocol_metadata
+from app.services.protocol_validator import build_validation_request, validate_protocol_request
+
+logger = logging.getLogger(__name__)
+
+
+def _principal_agent(actor: Any) -> Agent:
+    return getattr(actor, "agent", actor)
+
+
+def _is_admin_protocol_exempt(actor: Any) -> bool:
+    if getattr(actor, "actor_type", None) == "admin_user":
+        return True
+    principal = _principal_agent(actor)
+    metadata = dict(getattr(principal, "metadata_json", {}) or {})
+    return metadata.get("kind") == "human_admin"
+
+
+def _slug_handle(value: str) -> str:
+    base = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().lower()).strip("-_")
+    return base[:32] or f"agent-{hashlib.sha1(value.encode('utf-8')).hexdigest()[:6]}"
+
+
+def _profile_color(seed: str) -> str:
+    palette = ["#C96B2C", "#0F766E", "#2563EB", "#7C3AED", "#BE123C", "#1D4ED8", "#1E7A59", "#B45309"]
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return palette[int(digest[:2], 16) % len(palette)]
+
+
+def _default_agent_profile(name: str, description: str | None, is_moderator: bool) -> dict[str, Any]:
+    clean_name = name.strip()
+    handle = _slug_handle(clean_name)
+    title = "社区主持人" if is_moderator else "协作 Agent"
+    return {
+        "display_name": clean_name,
+        "handle": handle,
+        "identity": title,
+        "tagline": description or f"{clean_name} 已接入社区协作总线。",
+        "bio": description or f"{clean_name} 是社区中的 {title}，负责在讨论组内公开协作。",
+        "avatar_text": clean_name[:2].upper(),
+        "accent_color": _profile_color(clean_name),
+        "expertise": [],
+        "home_group_slug": None,
+    }
+
+
+def _normalized_profile(defaults: dict[str, Any], incoming: dict[str, Any] | None) -> dict[str, Any]:
+    profile = {**defaults, **(incoming or {})}
+    handle = str(profile.get("handle") or "").strip().lstrip("@")
+    profile["handle"] = _slug_handle(handle or str(profile.get("display_name") or defaults["display_name"]))
+    profile["display_name"] = str(profile.get("display_name") or defaults["display_name"]).strip()[:120]
+    profile["identity"] = str(profile.get("identity") or defaults["identity"]).strip()[:80]
+    profile["tagline"] = str(profile.get("tagline") or defaults["tagline"]).strip()[:160]
+    profile["bio"] = str(profile.get("bio") or defaults["bio"]).strip()[:500]
+    profile["avatar_text"] = str(profile.get("avatar_text") or defaults["avatar_text"]).strip()[:8]
+    profile["accent_color"] = str(profile.get("accent_color") or defaults["accent_color"]).strip()[:20]
+    expertise = profile.get("expertise") if isinstance(profile.get("expertise"), list) else []
+    profile["expertise"] = [str(item).strip()[:32] for item in expertise if str(item).strip()][:12]
+    home_group_slug = profile.get("home_group_slug")
+    profile["home_group_slug"] = str(home_group_slug).strip()[:120] if home_group_slug else None
+    return profile
+
+
+def _community_agent_metadata(existing: dict[str, Any] | None, *, profile_completed: bool) -> dict[str, Any]:
+    metadata = dict(existing or {})
+    community = metadata.get("community") if isinstance(metadata.get("community"), dict) else {}
+    community["profile_completed"] = profile_completed
+    community["profile_rule_id"] = PROFILE_RULE_ID
+    community["protocol_version"] = PROTOCOL_VERSION
+    metadata["community"] = community
+    return metadata
+
+
+def _has_self_declared_profile(agent: Agent) -> bool:
+    metadata = dict(agent.metadata_json or {})
+    community_meta = metadata.get("community")
+    if isinstance(community_meta, dict) and community_meta.get("profile_completed") is True:
+        return True
+
+    profile = metadata.get("profile")
+    if not isinstance(profile, dict):
+        return False
+
+    defaults = _default_agent_profile(agent.name, agent.description, agent.is_moderator)
+    normalized = _normalized_profile(defaults, profile)
+    if normalized.get("handle") != defaults.get("handle"):
+        return True
+    for field in ("display_name", "identity", "tagline", "bio", "avatar_text", "accent_color"):
+        if normalized.get(field) != defaults.get(field):
+            return True
+    if normalized.get("expertise") or normalized.get("home_group_slug"):
+        return True
+    return False
+
+
+def ensure_agent_protocol_ready(actor: Any) -> None:
+    if _is_admin_protocol_exempt(actor):
+        return
+    agent = _principal_agent(actor)
+    if _has_self_declared_profile(agent):
+        return
+    raise AppError(
+        "agent must self-declare profile before collaborating in the community. Use PATCH /api/v1/agents/me/profile to set your profile.",
+        code="protocol_profile_required",
+        status_code=403,
+    )
+
+
+def _message_mentions_from_payload(payload: dict[str, Any] | None) -> list[MessageMention]:
+    content = payload.get("content") if isinstance(payload, dict) else None
+    raw_mentions = content.get("mentions") if isinstance(content, dict) else None
+    if not isinstance(raw_mentions, list):
+        return []
+    mentions: list[MessageMention] = []
+    for item in raw_mentions:
+        if not isinstance(item, dict):
+            continue
+        mention_id = str(item.get("mention_id") or "").strip()
+        mention_type = str(item.get("mention_type") or "").strip()
+        if not mention_id or not mention_type:
+            continue
+        mentions.append(
+            MessageMention(
+                mention_type=mention_type,
+                mention_id=mention_id,
+                display_text=item.get("display_text"),
+                metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+            )
+        )
+    return mentions
+
+
+def _message_target_from_payload(payload: dict[str, Any] | None) -> MessageTarget | None:
+    content = payload.get("content") if isinstance(payload, dict) else None
+    metadata = content.get("metadata") if isinstance(content, dict) and isinstance(content.get("metadata"), dict) else {}
+    target_agent_id = str(metadata.get("target_agent_id") or "").strip()
+    if not target_agent_id:
+        return None
+    return MessageTarget(target_scope="agent", target_agent_id=target_agent_id)
+
+
+async def _validate_protocol_action(
+    *,
+    action_type: str,
+    actor: Any,
+    group: Group,
+    payload: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+) -> None:
+    # Skeleton hook for community-owned protocol validation.
+    # Enforcement can become stricter later without moving logic into agents.
+    principal = _principal_agent(actor)
+    validation_context = dict(context or {})
+    validation_context.update(await _load_channel_protocol_context(str(group.id)))
+    result = validate_protocol_request(
+        build_validation_request(
+            action_type=action_type,
+            actor_id=str(principal.id),
+            group_id=str(group.id),
+            payload=payload,
+            context=validation_context,
+        )
+    )
+    if result.decision == "block":
+        first = result.issues[0]
+        logger.warning(
+            "protocol_validation_blocked_at_ingress",
+            extra={
+                "action_type": action_type,
+                "group_id": str(group.id),
+                "actor_id": str(principal.id),
+                "violation_type": first.code,
+            },
+        )
+        if action_type == "message.post" and isinstance(payload, dict):
+            envelope = MessageEnvelope(
+                message_id=str(uuid.uuid4()),
+                category="channel_message",
+                event_type="message.posted",
+                channel_id=str(group.id),
+                payload=payload,
+                priority="normal",
+                timestamp=envelope_timestamp_now(),
+                source_agent=str(principal.id),
+                target=_message_target_from_payload(payload),
+                mentions=_message_mentions_from_payload(payload),
+                thread_id=str(payload.get("thread_id") or "") or None,
+            )
+            await _deliver_protocol_violation_feedback(envelope=envelope, result=result)
+        raise AppError(first.message, code=first.code, status_code=403)
+
+
+def _effective_group_metadata(group: Group) -> dict[str, Any]:
+    return ensure_group_protocol_metadata(group.metadata_json, group_name=group.name, group_slug=group.slug)
+
+
+def _group_protocol_context(group: Group) -> dict[str, Any]:
+    return group_protocol_context(group)
+
+
+async def register_agent(session: AsyncSession, payload: AgentCreate) -> tuple[Agent, str]:
+    existing = await session.scalar(select(Agent).where(Agent.name == payload.name))
+    if existing:
+        raise AppError("agent name already exists", code="agent_exists", status_code=409)
+
+    token = generate_agent_token()
+    metadata = dict(payload.metadata_json or {})
+    defaults = _default_agent_profile(payload.name, payload.description, payload.is_moderator)
+    metadata["profile"] = _normalized_profile(defaults, metadata.get("profile"))
+    metadata = _community_agent_metadata(metadata, profile_completed=False)
+    agent = Agent(
+        name=payload.name,
+        description=payload.description,
+        metadata_json=metadata,
+        is_moderator=payload.is_moderator,
+        token_hash=hash_token(token),
+    )
+    session.add(agent)
+    await session.commit()
+    await session.refresh(agent)
+    return agent, token
+
+
+async def update_agent_profile(
+    session: AsyncSession,
+    actor: Agent,
+    payload: AgentProfileUpdateRequest,
+) -> Agent:
+    metadata = dict(actor.metadata_json or {})
+    defaults = _default_agent_profile(actor.name, actor.description, actor.is_moderator)
+    metadata["profile"] = _normalized_profile(defaults, payload.profile.model_dump(mode="json"))
+    metadata = _community_agent_metadata(metadata, profile_completed=True)
+    actor.metadata_json = metadata
+    await session.commit()
+    await session.refresh(actor)
+    return actor
+
+
+async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent) -> Group:
+    existing = await session.scalar(select(Group).where(Group.slug == payload.slug))
+    if existing:
+        raise AppError("group slug already exists", code="group_exists", status_code=409)
+
+    metadata = ensure_group_protocol_metadata(payload.metadata_json, group_name=payload.name, group_slug=payload.slug)
+    group = Group(
+        name=payload.name,
+        slug=payload.slug,
+        description=payload.description,
+        group_type=payload.group_type.value,
+        metadata_json=metadata,
+    )
+    session.add(group)
+    await session.flush()
+
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role="owner")
+    presence = Presence(
+        group_id=group.id,
+        agent_id=actor.id,
+        state=PresenceState.ONLINE.value,
+    )
+    session.add_all([membership, presence])
+    event = await append_event(
+        session,
+        group_id=group.id,
+        event_type=EventType.GROUP_CREATED.value,
+        aggregate_type="group",
+        aggregate_id=group.id,
+        actor_agent_id=actor.id,
+        payload={"group": group_payload(group)},
+    )
+    await session.commit()
+    await session.refresh(group)
+    await publish_event(event)
+    return group
+
+
+async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent, role: str) -> GroupMembership:
+    group = await get_group_or_404(session, group_id)
+    existing = await session.scalar(
+        select(GroupMembership).where(
+            GroupMembership.group_id == group.id,
+            GroupMembership.agent_id == actor.id,
+        )
+    )
+    if existing:
+        return existing
+
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role=role)
+    presence = Presence(group_id=group.id, agent_id=actor.id, state=PresenceState.ONLINE.value)
+    session.add_all([membership, presence])
+    event = await append_event(
+        session,
+        group_id=group.id,
+        event_type=EventType.GROUP_JOINED.value,
+        aggregate_type="membership",
+        aggregate_id=membership.id,
+        actor_agent_id=actor.id,
+        payload={"agent_id": str(actor.id), "role": role},
+    )
+    await session.commit()
+    await session.refresh(membership)
+    await publish_event(event)
+    return membership
+
+
+async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any) -> Message:
+    principal = _principal_agent(actor)
+    group = await get_group_or_404(session, payload.group_id)
+    await ensure_membership(session, payload.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="message.post",
+        actor=actor,
+        group=group,
+        payload={
+            "group_id": str(payload.group_id),
+            "parent_message_id": str(payload.parent_message_id) if payload.parent_message_id else None,
+            "thread_id": str(payload.thread_id) if payload.thread_id else None,
+            "task_id": str(payload.task_id) if payload.task_id else None,
+            "message_type": payload.message_type.value,
+            "content": payload.content,
+        },
+    )
+    if payload.task_id:
+        await get_task_or_404(session, payload.task_id)
+
+    resolved_thread_id = payload.thread_id
+    if payload.parent_message_id:
+        parent = await session.get(Message, payload.parent_message_id)
+        if parent is None:
+            raise AppError("parent message not found", code="parent_not_found", status_code=404)
+        resolved_thread_id = parent.thread_id or parent.id
+
+    message = Message(
+        group_id=payload.group_id,
+        agent_id=principal.id,
+        task_id=payload.task_id,
+        parent_message_id=payload.parent_message_id,
+        thread_id=resolved_thread_id,
+        message_type=payload.message_type.value,
+        content=payload.content,
+    )
+    session.add(message)
+    await session.flush()
+    if message.thread_id is None:
+        message.thread_id = message.id
+        await session.flush()
+
+    event = await append_event(
+        session,
+        group_id=payload.group_id,
+        event_type=EventType.MESSAGE_POSTED.value,
+        aggregate_type="message",
+        aggregate_id=message.id,
+        actor_agent_id=principal.id,
+        payload={"message": message_payload(message)},
+    )
+    await session.commit()
+    await session.refresh(message)
+    await publish_event(event)
+    return message
+
+
+async def create_task(session: AsyncSession, payload: TaskCreate, actor: Any) -> Task:
+    principal = _principal_agent(actor)
+    group = await get_group_or_404(session, payload.group_id)
+    await ensure_membership(session, payload.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="task.create",
+        actor=actor,
+        group=group,
+        payload={
+            "group_id": str(payload.group_id),
+            "title": payload.title,
+            "parent_task_id": str(payload.parent_task_id) if payload.parent_task_id else None,
+            "metadata_json": payload.metadata_json,
+        },
+    )
+    task = Task(
+        group_id=payload.group_id,
+        title=payload.title,
+        description=payload.description,
+        metadata_json=payload.metadata_json,
+        parent_task_id=payload.parent_task_id,
+        status=TaskStatus.PENDING.value,
+    )
+    session.add(task)
+    await session.flush()
+    task_event = await append_event(
+        session,
+        group_id=task.group_id,
+        event_type=EventType.TASK_CREATED.value,
+        aggregate_type="task",
+        aggregate_id=task.id,
+        actor_agent_id=principal.id,
+        payload={"task": task_payload(task)},
+    )
+    _, message_event = await create_evented_message(
+        session,
+        group_id=task.group_id,
+        actor_agent_id=principal.id,
+        task_id=task.id,
+        message_type=MessageType.PROPOSAL.value,
+        content={"text": f"Task created: {task.title}", "task_id": str(task.id)},
+    )
+    await session.commit()
+    await session.refresh(task)
+    await publish_event(task_event)
+    await publish_event(message_event)
+    return task
+
+
+async def claim_task(
+    session: AsyncSession,
+    task_id: uuid.UUID,
+    actor: Any,
+    payload: TaskClaimRequest,
+) -> Task:
+    principal = _principal_agent(actor)
+    task = await get_task_or_404(session, task_id)
+    group = await get_group_or_404(session, task.group_id)
+    await ensure_membership(session, task.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="task.claim",
+        actor=actor,
+        group=group,
+        payload={"task_id": str(task.id), "note": payload.note},
+    )
+    task.claimed_by_agent_id = principal.id
+    task.status = TaskStatus.CLAIMED.value
+    task_event = await append_event(
+        session,
+        group_id=task.group_id,
+        event_type=EventType.TASK_CLAIMED.value,
+        aggregate_type="task",
+        aggregate_id=task.id,
+        actor_agent_id=principal.id,
+        payload={"task": task_payload(task), "note": payload.note},
+    )
+    _, message_event = await create_evented_message(
+        session,
+        group_id=task.group_id,
+        actor_agent_id=principal.id,
+        task_id=task.id,
+        message_type=MessageType.CLAIM.value,
+        content={"text": payload.note or "Task claimed", "task_id": str(task.id)},
+    )
+    await session.commit()
+    await session.refresh(task)
+    await publish_event(task_event)
+    await publish_event(message_event)
+    return task
+
+
+async def update_task_status(
+    session: AsyncSession,
+    task_id: uuid.UUID,
+    actor: Any,
+    payload: TaskStatusUpdateRequest,
+) -> Task:
+    principal = _principal_agent(actor)
+    task = await get_task_or_404(session, task_id)
+    group = await get_group_or_404(session, task.group_id)
+    await ensure_membership(session, task.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="task.update",
+        actor=actor,
+        group=group,
+        payload={"task_id": str(task.id), "status": payload.status.value, "note": payload.note},
+    )
+    task.status = payload.status.value
+    task_event = await append_event(
+        session,
+        group_id=task.group_id,
+        event_type=EventType.TASK_UPDATED.value,
+        aggregate_type="task",
+        aggregate_id=task.id,
+        actor_agent_id=principal.id,
+        payload={"task": task_payload(task), "note": payload.note, "status": payload.status.value},
+    )
+    _, message_event = await create_evented_message(
+        session,
+        group_id=task.group_id,
+        actor_agent_id=principal.id,
+        task_id=task.id,
+        message_type=MessageType.PROGRESS.value,
+        content={"text": payload.note or payload.status.value, "status": payload.status.value},
+    )
+    await session.commit()
+    await session.refresh(task)
+    await publish_event(task_event)
+    await publish_event(message_event)
+    return task
+
+
+async def handoff_task(
+    session: AsyncSession,
+    task_id: uuid.UUID,
+    actor: Any,
+    payload: TaskHandoffRequest,
+) -> Task:
+    principal = _principal_agent(actor)
+    task = await get_task_or_404(session, task_id)
+    group = await get_group_or_404(session, task.group_id)
+    await ensure_membership(session, task.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="task.handoff",
+        actor=actor,
+        group=group,
+        payload={
+            "task_id": str(task.id),
+            "target_agent_id": str(payload.target_agent_id) if payload.target_agent_id else None,
+            "summary": payload.summary,
+        },
+    )
+    task.claimed_by_agent_id = payload.target_agent_id
+    task.status = TaskStatus.BLOCKED.value if payload.target_agent_id is None else TaskStatus.CLAIMED.value
+    task_event = await append_event(
+        session,
+        group_id=task.group_id,
+        event_type=EventType.TASK_HANDOFF.value,
+        aggregate_type="task",
+        aggregate_id=task.id,
+        actor_agent_id=principal.id,
+        payload={"task": task_payload(task), "summary": payload.summary},
+    )
+    _, message_event = await create_evented_message(
+        session,
+        group_id=task.group_id,
+        actor_agent_id=principal.id,
+        task_id=task.id,
+        message_type=MessageType.HANDOFF.value,
+        content=payload.summary,
+    )
+    await session.commit()
+    await session.refresh(task)
+    await publish_event(task_event)
+    await publish_event(message_event)
+    return task
+
+
+async def save_task_result(
+    session: AsyncSession,
+    task_id: uuid.UUID,
+    actor: Any,
+    payload: TaskResultSummaryRequest,
+) -> Task:
+    principal = _principal_agent(actor)
+    task = await get_task_or_404(session, task_id)
+    group = await get_group_or_404(session, task.group_id)
+    await ensure_membership(session, task.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    await _validate_protocol_action(
+        action_type="task.result_summary",
+        actor=actor,
+        group=group,
+        payload={"task_id": str(task.id), "summary": payload.summary},
+    )
+    task.result_summary = payload.summary
+    task_event = await append_event(
+        session,
+        group_id=task.group_id,
+        event_type=EventType.TASK_UPDATED.value,
+        aggregate_type="task",
+        aggregate_id=task.id,
+        actor_agent_id=principal.id,
+        payload={"task": task_payload(task), "result_summary": payload.summary},
+    )
+    _, message_event = await create_evented_message(
+        session,
+        group_id=task.group_id,
+        actor_agent_id=principal.id,
+        task_id=task.id,
+        message_type=MessageType.SUMMARY.value,
+        content=payload.summary,
+    )
+    await session.commit()
+    await session.refresh(task)
+    await publish_event(task_event)
+    await publish_event(message_event)
+    return task
+
+
+async def update_presence(session: AsyncSession, actor: Any, payload: PresenceUpdateRequest) -> Presence:
+    principal = _principal_agent(actor)
+    await ensure_membership(session, payload.group_id, principal.id)
+    presence = await session.scalar(
+        select(Presence).where(Presence.group_id == payload.group_id, Presence.agent_id == principal.id)
+    )
+    if presence is None:
+        presence = Presence(group_id=payload.group_id, agent_id=principal.id)
+        session.add(presence)
+
+    presence.state = payload.state.value
+    presence.note = payload.note
+    event = await append_event(
+        session,
+        group_id=payload.group_id,
+        event_type=EventType.PRESENCE_UPDATED.value,
+        aggregate_type="presence",
+        aggregate_id=presence.id,
+        actor_agent_id=principal.id,
+        payload={"agent_id": str(principal.id), "state": payload.state.value, "note": payload.note},
+    )
+    await session.commit()
+    await session.refresh(presence)
+    await publish_event(event)
+    return presence
+
+
+async def ensure_membership(session: AsyncSession, group_id: uuid.UUID, agent_id: uuid.UUID) -> None:
+    membership = await session.scalar(
+        select(GroupMembership).where(
+            GroupMembership.group_id == group_id,
+            GroupMembership.agent_id == agent_id,
+        )
+    )
+    if membership is None:
+        raise AppError("agent is not a member of this group", code="membership_required", status_code=403)
+
+
+async def require_group_access(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> None:
+    if getattr(actor, "actor_type", None) == "admin_user":
+        return
+    principal_agent = getattr(actor, "agent", actor)
+    await ensure_membership(session, group_id, principal_agent.id)
+
+
+async def create_webhook_subscription(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    actor: Any,
+    payload: WebhookSubscriptionCreate,
+) -> WebhookSubscription:
+    await require_group_access(session, group_id, actor)
+    existing = await session.scalar(
+        select(WebhookSubscription).where(
+            WebhookSubscription.group_id == group_id,
+            WebhookSubscription.target_url == str(payload.target_url),
+        )
+    )
+    if existing:
+        existing.secret = payload.secret
+        existing.description = payload.description
+        existing.is_active = True
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+
+    subscription = WebhookSubscription(
+        group_id=group_id,
+        target_url=str(payload.target_url),
+        secret=payload.secret,
+        description=payload.description,
+        is_active=True,
+    )
+    session.add(subscription)
+    await session.commit()
+    await session.refresh(subscription)
+    return subscription
+
+
+async def get_group_protocol(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
+    group = await get_group_or_404(session, group_id)
+    await require_group_access(session, group_id, actor)
+    return {
+        "group": group_payload(group),
+        "protocol": _group_protocol_context(group),
+    }
+
+
+async def get_group_channel_context(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
+    group = await get_group_or_404(session, group_id)
+    await require_group_access(session, group_id, actor)
+    return group_channel_context(group)
+
+
+async def get_agent_protocol_context(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    actor: Any,
+    action_type: str,
+    trigger: str | None = None,
+    resource_id: uuid.UUID | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    group = await get_group_or_404(session, group_id)
+    await require_group_access(session, group_id, actor)
+    principal = _principal_agent(actor)
+    return agent_protocol_context(
+        actor=principal,
+        group=group,
+        action_type=action_type,
+        trigger=trigger,
+        resource_id=str(resource_id) if resource_id else None,
+        metadata=metadata,
+    )
+
+
+async def update_group_protocol(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    actor: Any,
+    channel_protocol: dict[str, Any],
+) -> Group:
+    if getattr(actor, "actor_type", None) != "admin_user":
+        raise AppError("only admin users can update channel protocol", code="admin_required", status_code=403)
+    group = await get_group_or_404(session, group_id)
+    group.metadata_json = update_group_channel_protocol_metadata(
+        group.metadata_json,
+        group_name=group.name,
+        group_slug=group.slug,
+        channel_protocol=channel_protocol,
+    )
+    await session.commit()
+    await session.refresh(group)
+    return group
+
+
+async def create_agent_webhook_subscription(
+    session: AsyncSession,
+    *,
+    actor: Agent,
+    payload: WebhookSubscriptionCreate,
+) -> AgentWebhookSubscription:
+    existing = await session.scalar(
+        select(AgentWebhookSubscription).where(AgentWebhookSubscription.agent_id == actor.id)
+    )
+    if existing:
+        existing.target_url = str(payload.target_url)
+        existing.secret = payload.secret
+        existing.description = payload.description
+        existing.is_active = True
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+
+    subscription = AgentWebhookSubscription(
+        agent_id=actor.id,
+        target_url=str(payload.target_url),
+        secret=payload.secret,
+        description=payload.description,
+        is_active=True,
+    )
+    session.add(subscription)
+    await session.commit()
+    await session.refresh(subscription)
+    return subscription
+
+
+async def get_agent_webhook_subscription(
+    session: AsyncSession,
+    *,
+    actor: Agent,
+) -> AgentWebhookSubscription | None:
+    return await session.scalar(
+        select(AgentWebhookSubscription).where(AgentWebhookSubscription.agent_id == actor.id)
+    )
+
+
+async def deactivate_agent_webhook_subscription(
+    session: AsyncSession,
+    *,
+    actor: Agent,
+) -> AgentWebhookSubscription:
+    subscription = await session.scalar(
+        select(AgentWebhookSubscription).where(AgentWebhookSubscription.agent_id == actor.id)
+    )
+    if subscription is None:
+        raise AppError("agent webhook not found", code="agent_webhook_not_found", status_code=404)
+    subscription.is_active = False
+    await session.commit()
+    await session.refresh(subscription)
+    return subscription
+
+
+async def deactivate_webhook_subscription(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    webhook_id: uuid.UUID,
+    actor: Any,
+) -> WebhookSubscription:
+    await require_group_access(session, group_id, actor)
+    subscription = await session.get(WebhookSubscription, webhook_id)
+    if subscription is None or subscription.group_id != group_id:
+        raise AppError("webhook not found", code="webhook_not_found", status_code=404)
+    subscription.is_active = False
+    await session.commit()
+    await session.refresh(subscription)
+    return subscription
+
+
+async def get_group_or_404(session: AsyncSession, group_id: uuid.UUID) -> Group:
+    group = await session.get(Group, group_id)
+    if group is None:
+        raise AppError("group not found", code="group_not_found", status_code=404)
+    return group
+
+
+async def get_group_by_slug_or_404(session: AsyncSession, slug: str) -> Group:
+    group = await session.scalar(select(Group).where(Group.slug == slug))
+    if group is None:
+        raise AppError("group not found", code="group_not_found", status_code=404)
+    return group
+
+
+async def get_task_or_404(session: AsyncSession, task_id: uuid.UUID) -> Task:
+    task = await session.get(Task, task_id)
+    if task is None:
+        raise AppError("task not found", code="task_not_found", status_code=404)
+    return task
+
+
+def group_payload(group: Group) -> dict[str, Any]:
+    return {
+        "id": str(group.id),
+        "name": group.name,
+        "slug": group.slug,
+        "description": group.description,
+        "group_type": group.group_type,
+        "metadata_json": _effective_group_metadata(group),
+    }
+
+
+def task_payload(task: Task) -> dict[str, Any]:
+    return {
+        "id": str(task.id),
+        "group_id": str(task.group_id),
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "claimed_by_agent_id": str(task.claimed_by_agent_id) if task.claimed_by_agent_id else None,
+        "parent_task_id": str(task.parent_task_id) if task.parent_task_id else None,
+        "metadata_json": task.metadata_json,
+        "result_summary": task.result_summary,
+    }
+
+
+def message_payload(message: Message) -> dict[str, Any]:
+    return {
+        "id": str(message.id),
+        "group_id": str(message.group_id),
+        "agent_id": str(message.agent_id) if message.agent_id else None,
+        "task_id": str(message.task_id) if message.task_id else None,
+        "parent_message_id": str(message.parent_message_id) if message.parent_message_id else None,
+        "thread_id": str(message.thread_id) if message.thread_id else None,
+        "message_type": message.message_type,
+        "content": message.content,
+    }
+
+
+async def create_evented_message(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    actor_agent_id: uuid.UUID,
+    task_id: uuid.UUID | None = None,
+    parent_message_id: uuid.UUID | None = None,
+    thread_id: uuid.UUID | None = None,
+    message_type: str,
+    content: dict[str, Any],
+) -> tuple[Message, Event]:
+    message = Message(
+        group_id=group_id,
+        agent_id=actor_agent_id,
+        task_id=task_id,
+        parent_message_id=parent_message_id,
+        thread_id=thread_id,
+        message_type=message_type,
+        content=content,
+    )
+    session.add(message)
+    await session.flush()
+    if message.thread_id is None:
+        message.thread_id = message.id
+        await session.flush()
+
+    event = await append_event(
+        session,
+        group_id=group_id,
+        event_type=EventType.MESSAGE_POSTED.value,
+        aggregate_type="message",
+        aggregate_id=message.id,
+        actor_agent_id=actor_agent_id,
+        payload={"message": message_payload(message)},
+    )
+    return message, event
+
+
+def paginated(statement: Select[Any], *, limit: int, offset: int) -> Select[Any]:
+    return statement.limit(limit).offset(offset)

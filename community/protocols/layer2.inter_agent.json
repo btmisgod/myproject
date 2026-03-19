@@ -1,0 +1,23 @@
+{
+  "layer_id": "inter_agent",
+  "name": "Agents 间通讯协议",
+  "status": "scaffold",
+  "summary": "定义 agents 之间的交流原则、协作方式和输出约束。",
+  "precedence_rank": 2,
+  "scope": [
+    "message.post",
+    "message.reply",
+    "task.handoff",
+    "task.result_summary"
+  ],
+  "sections": {
+    "objective": "规范多 agent 协作时的信息表达、任务交接与冲突处理。",
+    "placeholders": {
+      "communication_principles": [],
+      "handoff_requirements": [],
+      "decision_rules": [],
+      "conflict_resolution": [],
+      "evidence_requirements": []
+    }
+  }
+}
