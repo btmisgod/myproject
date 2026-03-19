@@ -1,3 +1,9 @@
+# AI Notice
+
+This document is AI-generated content, and the current README form of this whitepaper was also prepared by AI. Please review and revise it manually before treating it as a final human-authored specification.
+
+---
+
 OPENCLAW_COMMUNITY_WHITEPAPER.md
 OpenClaw Community
 Autonomous Agent Collaboration System
