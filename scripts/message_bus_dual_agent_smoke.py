@@ -17,6 +17,34 @@ COMMUNITY_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
 GROUP_ID = "54b12c32-dbd3-46d8-97ee-22bf8a499709"
 
 
+def message_id(message: dict[str, Any]) -> str:
+    return message["id"]
+
+
+def message_group_id(message: dict[str, Any]) -> str:
+    return message.get("container", {}).get("group_id") or message["group_id"]
+
+
+def message_author_id(message: dict[str, Any]) -> str | None:
+    return message.get("author", {}).get("agent_id") or message.get("agent_id")
+
+
+def message_thread_id(message: dict[str, Any]) -> str | None:
+    return message.get("relations", {}).get("thread_id") or message.get("thread_id")
+
+
+def message_parent_id(message: dict[str, Any]) -> str | None:
+    return message.get("relations", {}).get("parent_message_id") or message.get("parent_message_id")
+
+
+def message_kind(message: dict[str, Any]) -> str:
+    return message.get("semantics", {}).get("kind") or message.get("message_type") or "analysis"
+
+
+def message_text(message: dict[str, Any]) -> str | None:
+    return message.get("body", {}).get("text") or message.get("content", {}).get("text")
+
+
 @dataclass(frozen=True)
 class AgentEndpoint:
     name: str
@@ -65,12 +93,10 @@ async def create_real_message(*, actor: AgentEndpoint, text: str) -> dict[str, A
             f"{COMMUNITY_API_BASE_URL}/messages",
             headers={"X-Agent-Token": actor.token},
             json={
-                "group_id": GROUP_ID,
-                "message_type": "analysis",
-                "content": {
-                    "text": text,
-                    "source": "message_bus_dual_agent_smoke.py",
-                },
+                "container": {"group_id": GROUP_ID},
+                "body": {"text": text},
+                "semantics": {"kind": "analysis"},
+                "extensions": {"source": "message_bus_dual_agent_smoke.py"},
             },
         )
     response.raise_for_status()
@@ -105,7 +131,7 @@ async def wait_for_agent_reply(
     while asyncio.get_running_loop().time() < deadline:
         items = await list_thread_messages(actor=observer, thread_id=thread_id)
         for item in items:
-            if item["agent_id"] == expected_agent_id and item.get("parent_message_id") == parent_message_id:
+            if message_author_id(item) == expected_agent_id and message_parent_id(item) == parent_message_id:
                 return item
         await asyncio.sleep(1.0)
     raise TimeoutError(f"timed out waiting for agent {expected_agent_id} reply in thread {thread_id}")
@@ -118,20 +144,20 @@ async def deliver_real_message_to_agent(
     override_text: str | None = None,
 ) -> dict[str, Any]:
     bus = make_bus(target)
-    payload = dict(source_message.get("content") or {})
+    payload = {"text": message_text(source_message)}
     if override_text is not None:
         payload["text"] = override_text
-    payload["message_type"] = source_message.get("message_type", "analysis")
+    payload["message_type"] = message_kind(source_message)
 
     report = await bus.publish(
         MessageEnvelope(
             message_id=source_message["id"],
             category="channel_message",
             event_type="message.posted",
-            channel_id=source_message["group_id"],
-            source_agent=source_message["agent_id"],
+            channel_id=message_group_id(source_message),
+            source_agent=message_author_id(source_message),
             target=MessageTarget(target_scope="agent", target_agent_id=target.agent_id),
-            thread_id=source_message["thread_id"],
+            thread_id=message_thread_id(source_message),
             payload=payload,
             priority="normal",
             timestamp=envelope_timestamp_now(),
@@ -159,9 +185,9 @@ async def run_pass_chain() -> None:
 
     neko_reply = await wait_for_agent_reply(
         observer=AGENT_33,
-        thread_id=seed_message["thread_id"],
+        thread_id=message_thread_id(seed_message),
         expected_agent_id=NEKO.agent_id,
-        parent_message_id=seed_message["id"],
+        parent_message_id=message_id(seed_message),
     )
 
     to_33 = await deliver_real_message_to_agent(
@@ -174,9 +200,9 @@ async def run_pass_chain() -> None:
             {
                 "scenario": "dual_agent_pass",
                 "seed_message_id": seed_message["id"],
-                "seed_thread_id": seed_message["thread_id"],
+                "seed_thread_id": message_thread_id(seed_message),
                 "neko_reply_id": neko_reply["id"],
-                "neko_reply_text": neko_reply.get("content", {}).get("text"),
+                "neko_reply_text": message_text(neko_reply),
                 "deliveries": {
                     "community_to_neko": to_neko,
                     "community_to_33": to_33,
@@ -199,10 +225,10 @@ async def run_warn_chain() -> None:
             message_id=seed_message["id"],
             category="channel_message",
             event_type="message.posted",
-            channel_id=seed_message["group_id"],
-            source_agent=seed_message["agent_id"],
+            channel_id=message_group_id(seed_message),
+            source_agent=message_author_id(seed_message),
             target=None,
-            thread_id=seed_message["thread_id"],
+            thread_id=message_thread_id(seed_message),
             payload={
                 "text": "dual-agent warn payload",
                 "message_type": "analysis",
@@ -217,7 +243,7 @@ async def run_warn_chain() -> None:
             {
                 "scenario": "dual_agent_warn",
                 "seed_message_id": seed_message["id"],
-                "seed_thread_id": seed_message["thread_id"],
+                "seed_thread_id": message_thread_id(seed_message),
                 "route_type": report.routing_plan.route_type,
                 "protocol_validation": report.envelope.metadata.get("protocol_validation"),
                 "delivery_results": [item.metadata for item in report.delivery_results],

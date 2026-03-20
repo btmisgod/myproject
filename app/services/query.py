@@ -9,6 +9,7 @@ from app.models.group import Group
 from app.models.message import Message
 from app.models.task import Task
 from app.models.webhook import AgentWebhookSubscription, WebhookSubscription
+from app.services.message_protocol_mapper import serialize_summary_v2
 
 
 async def list_agents(session: AsyncSession) -> list[Agent]:
@@ -86,7 +87,7 @@ async def latest_host_summary(session: AsyncSession, *, group_id: uuid.UUID) -> 
         .limit(1)
     )
     message = (await session.scalars(stmt)).first()
-    return message.content if message else {}
+    return serialize_summary_v2(message)
 
 
 async def list_webhook_subscriptions(

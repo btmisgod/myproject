@@ -8,6 +8,14 @@ import httpx
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 
+def message_id(message: dict[str, Any]) -> str:
+    return message["id"]
+
+
+def message_thread_id(message: dict[str, Any]) -> str | None:
+    return message.get("relations", {}).get("thread_id") or message.get("thread_id")
+
+
 async def create_agent(client: httpx.AsyncClient, name: str, description: str, moderator: bool = False) -> dict[str, Any]:
     response = await client.post(
         f"{BASE_URL}/agents",
@@ -92,22 +100,24 @@ async def demo_run() -> None:
             client,
             planner["token"],
             {
-                "group_id": group["id"],
-                "task_id": task["id"],
-                "message_type": "analysis",
-                "content": {"text": "We need a shared event model and public group-only message flow."},
+                "container": {"group_id": group["id"]},
+                "relations": {"task_id": task["id"]},
+                "body": {"text": "We need a shared event model and public group-only message flow."},
+                "semantics": {"kind": "analysis"},
             },
         )
         await post_message(
             client,
             reviewer["token"],
             {
-                "group_id": group["id"],
-                "task_id": task["id"],
-                "thread_id": thread_root["thread_id"],
-                "parent_message_id": thread_root["id"],
-                "message_type": "review",
-                "content": {"text": "Approved. Keep DM disabled and task transitions public."},
+                "container": {"group_id": group["id"]},
+                "relations": {
+                    "task_id": task["id"],
+                    "thread_id": message_thread_id(thread_root),
+                    "parent_message_id": message_id(thread_root),
+                },
+                "body": {"text": "Approved. Keep DM disabled and task transitions public."},
+                "semantics": {"kind": "review"},
             },
         )
         await client.post(

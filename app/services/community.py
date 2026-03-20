@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.security import generate_agent_token, hash_token
 from app.models.agent import Agent, GroupMembership, Presence
@@ -31,6 +32,12 @@ from app.schemas.webhooks import WebhookSubscriptionCreate
 from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
 from app.services.event_bus import append_event, publish_event
 from app.services.message_envelope import MessageEnvelope, MessageMention, MessageTarget, envelope_timestamp_now
+from app.services.message_protocol_mapper import (
+    canonical_v2_to_legacy_message,
+    canonical_v2_to_storage_content,
+    normalize_message_to_canonical_v2,
+    serialize_message_v2,
+)
 from app.services.protocol_validation_hook import _deliver_protocol_violation_feedback, _load_channel_protocol_context
 from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, current_protocol_document, ensure_group_protocol_metadata, group_channel_context, group_protocol_context, update_group_channel_protocol_metadata
 from app.services.protocol_validator import build_validation_request, validate_protocol_request
@@ -342,18 +349,16 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
     group = await get_group_or_404(session, payload.group_id)
     await ensure_membership(session, payload.group_id, principal.id)
     ensure_agent_protocol_ready(actor)
+    canonical_message_v2 = normalize_message_to_canonical_v2(payload.model_dump(mode="json"))
+    validation_payload = canonical_v2_to_legacy_message(canonical_message_v2)
+    if settings.message_protocol_v2:
+        validation_payload["canonical_message_v2"] = canonical_message_v2
+
     await _validate_protocol_action(
         action_type="message.post",
         actor=actor,
         group=group,
-        payload={
-            "group_id": str(payload.group_id),
-            "parent_message_id": str(payload.parent_message_id) if payload.parent_message_id else None,
-            "thread_id": str(payload.thread_id) if payload.thread_id else None,
-            "task_id": str(payload.task_id) if payload.task_id else None,
-            "message_type": payload.message_type.value,
-            "content": payload.content,
-        },
+        payload=validation_payload,
     )
     if payload.task_id:
         await get_task_or_404(session, payload.task_id)
@@ -372,7 +377,7 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
         parent_message_id=payload.parent_message_id,
         thread_id=resolved_thread_id,
         message_type=payload.message_type.value,
-        content=payload.content,
+        content=canonical_v2_to_storage_content(canonical_message_v2),
     )
     session.add(message)
     await session.flush()
@@ -879,16 +884,7 @@ def task_payload(task: Task) -> dict[str, Any]:
 
 
 def message_payload(message: Message) -> dict[str, Any]:
-    return {
-        "id": str(message.id),
-        "group_id": str(message.group_id),
-        "agent_id": str(message.agent_id) if message.agent_id else None,
-        "task_id": str(message.task_id) if message.task_id else None,
-        "parent_message_id": str(message.parent_message_id) if message.parent_message_id else None,
-        "thread_id": str(message.thread_id) if message.thread_id else None,
-        "message_type": message.message_type,
-        "content": message.content,
-    }
+    return serialize_message_v2(message)
 
 
 async def create_evented_message(
@@ -900,8 +896,9 @@ async def create_evented_message(
     parent_message_id: uuid.UUID | None = None,
     thread_id: uuid.UUID | None = None,
     message_type: str,
-    content: dict[str, Any],
+    content: dict[str, Any] | str,
 ) -> tuple[Message, Event]:
+    raw_content = content if isinstance(content, dict) else {"text": str(content or "")}
     message = Message(
         group_id=group_id,
         agent_id=actor_agent_id,
@@ -909,7 +906,38 @@ async def create_evented_message(
         parent_message_id=parent_message_id,
         thread_id=thread_id,
         message_type=message_type,
-        content=content,
+        content=canonical_v2_to_storage_content(
+            normalize_message_to_canonical_v2(
+                {
+                    "container": {"group_id": str(group_id)},
+                    "author": {"agent_id": str(actor_agent_id)},
+                    "relations": {
+                        "thread_id": str(thread_id) if thread_id else None,
+                        "parent_message_id": str(parent_message_id) if parent_message_id else None,
+                        "task_id": str(task_id) if task_id else None,
+                    },
+                    "body": {
+                        "text": raw_content.get("text"),
+                        "blocks": raw_content.get("blocks") if isinstance(raw_content.get("blocks"), list) else [],
+                        "attachments": (
+                            raw_content.get("attachments") if isinstance(raw_content.get("attachments"), list) else []
+                        ),
+                    },
+                    "semantics": {"kind": message_type},
+                    "routing": {
+                        "mentions": raw_content.get("mentions") if isinstance(raw_content.get("mentions"), list) else [],
+                    },
+                    "extensions": {
+                        "source": raw_content.get("source"),
+                        "custom": {
+                            k: v
+                            for k, v in raw_content.items()
+                            if k not in {"text", "blocks", "attachments", "mentions", "source"}
+                        },
+                    },
+                }
+            )
+        ),
     )
     session.add(message)
     await session.flush()

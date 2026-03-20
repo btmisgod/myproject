@@ -13,6 +13,7 @@ from app.models.group import Group
 from app.models.webhook import AgentWebhookSubscription
 from app.services.channel_protocol_binding import read_channel_protocol_binding
 from app.services.delivery_adapter import WebhookDeliveryAdapter
+from app.services.message_protocol_mapper import normalize_message_to_canonical_v2
 from app.services.message_envelope import DeliveryTarget, MessageEnvelope, MessageTarget, envelope_timestamp_now
 from app.services.protocol_validation_types import ProtocolValidationResult
 from app.services.protocol_validator import build_validation_request, validate_protocol_request
@@ -121,55 +122,64 @@ def _build_protocol_violation_payload(
 ) -> dict[str, Any]:
     first = result.issues[0] if result.issues else None
     violation_type = first.code if first else "protocol_validation_blocked"
-    violation_reason = first.message if first else "消息因协议校验失败而被阻止"
+    violation_reason = first.message if first else "protocol validation blocked outbound message"
     violation_details = first.details if first and isinstance(first.details, dict) else {}
     required_fix = (
         violation_details.get("suggestion")
         or result.suggestion
-        or "请修正消息后重新发送，并补充协议要求的结构化字段。"
+        or "fix the outbound message and resend it"
     )
-    original_text = ""
-    if isinstance(envelope.payload, dict):
-        original_text = str(envelope.payload.get("text") or envelope.payload.get("content") or "").strip()
-    excerpt = original_text[:280] if original_text else ""
-    feedback_text = (
-        f"协议校验失败：{violation_reason}\n"
-        f"修正要求：{required_fix}\n"
-        "操作要求：请修正后重新发送。"
-    )
-    protocol_violation = {
-        "event_type": "protocol_violation",
-        "violation_type": violation_type,
-        "violation_reason": violation_reason,
-        "required_fix": required_fix,
-        "action_required": "resend_corrected_message",
-        "original_message_excerpt": excerpt,
-        "channel_id": envelope.channel_id,
-        "group_id": envelope.channel_id,
-        "validator_rule": violation_details.get("rule"),
-        "severity": result.decision,
-        "protocol_issue": violation_details.get("protocol_issue"),
-        "original_event_type": envelope.event_type,
-        "original_message_id": envelope.message_id,
+    canonical_message = normalize_message_to_canonical_v2(envelope.payload if isinstance(envelope.payload, dict) else {})
+    extensions = canonical_message.get("extensions") if isinstance(canonical_message.get("extensions"), dict) else {}
+    client_request_id = str(
+        extensions.get("client_request_id")
+        or extensions.get("outbound_correlation_id")
+        or (
+            extensions.get("custom").get("idempotency_key")
+            if isinstance(extensions.get("custom"), dict)
+            else None
+        )
+        or ""
+    ).strip() or None
+    receipt = {
+        "client_request_id": client_request_id,
+        "outbound_correlation_id": client_request_id,
+        "community_message_id": None,
+        "thread_id": envelope.thread_id,
+        "status": "rejected",
+        "success": False,
+        "validator_result": {
+            "decision": result.decision,
+            "violation_type": violation_type,
+            "violation_reason": violation_reason,
+            "validator_rule": violation_details.get("rule"),
+            "protocol_issue": violation_details.get("protocol_issue"),
+            "required_fix": required_fix,
+        },
+        "projection_result": {
+            "projected": False,
+            "reason": "validator_blocked",
+        },
+        "timestamp": envelope.timestamp,
+        "non_intake": True,
+        "debug": False,
     }
     return {
-        "message_type": "meta",
-        "flow_type": "status",
-        "intent": "inform",
-        "text": feedback_text,
-        "violation_type": violation_type,
-        "violation_reason": violation_reason,
-        "required_fix": required_fix,
-        "action_required": "resend_corrected_message",
-        "original_message_excerpt": excerpt,
-        "channel_id": envelope.channel_id,
-        "group_id": envelope.channel_id,
-        "validator_rule": violation_details.get("rule"),
-        "severity": result.decision,
-        "metadata": {
-            "protocol_violation": protocol_violation,
-            "target_agent_id": envelope.source_agent,
+        "event": {
+            "sequence_id": 0,
+            "event_id": str(uuid.uuid4()),
+            "group_id": envelope.channel_id,
+            "event_type": "message.rejected",
+            "aggregate_type": "sender_receipt",
+            "aggregate_id": envelope.message_id,
+            "actor_agent_id": envelope.source_agent,
+            "payload": {"receipt": receipt},
+            "created_at": envelope.timestamp,
         },
+        "entity": {"receipt": receipt},
+        "projection_type": "sender_receipt",
+        "version": 1,
+        "group_id": envelope.channel_id,
     }
 
 
@@ -195,7 +205,7 @@ async def _resolve_agent_webhook_target(agent_id: str, group_id: str) -> Deliver
             target_id=agent_id,
             group_id=group_id,
             metadata={
-                "mode": "protocol_violation_feedback",
+                "mode": "sender_receipt",
                 "webhook_url": subscription.target_url,
                 "webhook_secret": subscription.secret,
             },
@@ -235,9 +245,9 @@ async def _deliver_protocol_violation_feedback(
     feedback_envelope = MessageEnvelope(
         message_id=str(uuid.uuid4()),
         category="system_event",
-        event_type="protocol_violation",
+        event_type="message.rejected",
         channel_id=envelope.channel_id,
-        payload=payload,
+        payload={"receipt": payload.get("entity", {}).get("receipt", {})},
         priority="high",
         timestamp=envelope_timestamp_now(),
         source_agent="community_system",
@@ -246,9 +256,10 @@ async def _deliver_protocol_violation_feedback(
         thread_id=envelope.thread_id,
         metadata={
             "feedback_for_message_id": envelope.message_id,
-            "feedback_type": "protocol_violation",
+            "feedback_type": "sender_receipt",
         },
     )
+    target.metadata["payload_override"] = payload
     adapter = WebhookDeliveryAdapter(timeout_seconds=5.0)
     result_delivery = await adapter.deliver(feedback_envelope, target)
     issue = result.issues[0] if result.issues else None

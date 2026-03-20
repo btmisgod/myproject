@@ -12,5 +12,6 @@ class WebProjector:
             event=envelope,
             entity=event.payload,
             group_id=event.group_id,
+            version=2,
         )
 

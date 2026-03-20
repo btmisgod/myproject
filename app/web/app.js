@@ -222,10 +222,164 @@ function messageText(content) {
   if (!content) {
     return "";
   }
+  if (content.body && typeof content.body === "object" && typeof content.body.text === "string") {
+    return content.body.text;
+  }
   if (typeof content.text === "string") {
     return content.text;
   }
   return JSON.stringify(content, null, 2);
+}
+
+function messageAuthorId(message) {
+  return message?.author?.agent_id || message?.agent_id || null;
+}
+
+function messageKind(message) {
+  return message?.semantics?.kind || message?.message_type || "analysis";
+}
+
+function messageRelations(message) {
+  return message?.relations || {
+    thread_id: message?.thread_id || null,
+    task_id: message?.task_id || null,
+    parent_message_id: message?.parent_message_id || null,
+  };
+}
+
+function messageSemantics(message) {
+  return message?.semantics || {
+    kind: message?.message_type || null,
+    intent: message?.content?.intent || message?.content?.metadata?.intent || null,
+    topic: message?.content?.metadata?.topic || null,
+  };
+}
+
+function messageRouting(message) {
+  const metadata = message?.content?.metadata || {};
+  return message?.routing || {
+    target: {
+      scope: metadata.target_agent_id || metadata.target_agent ? "agent" : null,
+      agent_id: metadata.target_agent_id || null,
+      agent_label: metadata.target_agent || null,
+    },
+    mentions: Array.isArray(message?.content?.mentions) ? message.content.mentions : [],
+    assignees: Array.isArray(metadata.assignees) ? metadata.assignees : [],
+  };
+}
+
+function messageExtensions(message) {
+  return message?.extensions || {
+    client_request_id: message?.content?.metadata?.client_request_id || null,
+    outbound_correlation_id: message?.content?.metadata?.outbound_correlation_id || null,
+    source: message?.content?.source || message?.content?.metadata?.source || null,
+    custom: message?.content?.metadata || {},
+  };
+}
+
+function runtimeResultOf(value) {
+  return value?.runtime || value?.payload?.runtime || value?.entity?.runtime || null;
+}
+
+function eventMessageOf(event) {
+  return event?.payload?.message || event?.entity?.message || null;
+}
+
+function eventReceiptOf(event) {
+  return event?.payload?.receipt || event?.entity?.receipt || null;
+}
+
+function eventCanonicalizedMessageOf(event) {
+  return event?.payload?.canonicalized_message || event?.entity?.canonicalized_message || null;
+}
+
+function formatCompactJson(value) {
+  if (value == null) {
+    return "-";
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function renderKeyValueRows(entries) {
+  return entries
+    .filter(([, value]) => value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && !value.length))
+    .map(([label, value]) => {
+      const display = Array.isArray(value) ? value.join(", ") : typeof value === "object" ? formatCompactJson(value) : String(value);
+      return `<div class="detail-row"><span class="detail-label">${escapeHtml(label)}</span><span class="detail-value">${escapeHtml(display)}</span></div>`;
+    })
+    .join("");
+}
+
+function renderRuntimePanel(runtime) {
+  if (!runtime) {
+    return "";
+  }
+  return `
+    <div class="detail-panel runtime-panel">
+      <div class="detail-panel-title">Runtime ????</div>
+      ${renderKeyValueRows([
+        ["category", runtime.category],
+        ["mode", runtime.mode],
+        ["reason", runtime.reason],
+        ["relevance", runtime.relevance ? `${runtime.relevance.value} / ${runtime.relevance.reason || "-"}` : null],
+        ["obligation", runtime.obligation ? `${runtime.obligation.value} / ${runtime.obligation.reason || "-"}` : null],
+        ["action", runtime.actions?.decision],
+        ["should_reply", runtime.actions?.should_reply],
+        ["should_execute", runtime.actions?.should_execute],
+        ["should_sync_state", runtime.actions?.should_sync_state],
+        ["reply_id", runtime.reply_id],
+      ])}
+    </div>
+  `;
+}
+
+function renderMessageFactPanels(message) {
+  if (!message) {
+    return "";
+  }
+  const relations = messageRelations(message);
+  const semantics = messageSemantics(message);
+  const routing = messageRouting(message);
+  const extensions = messageExtensions(message);
+  return `
+    <div class="detail-panel-grid">
+      <div class="detail-panel">
+        <div class="detail-panel-title">????</div>
+        ${renderKeyValueRows([
+          ["group_id", message?.container?.group_id || message?.group_id],
+          ["author", messageAuthorId(message)],
+          ["thread_id", relations.thread_id],
+          ["task_id", relations.task_id],
+          ["parent_message_id", relations.parent_message_id],
+          ["text", messageText(message)],
+        ])}
+      </div>
+      <div class="detail-panel">
+        <div class="detail-panel-title">????</div>
+        ${renderKeyValueRows([
+          ["kind", semantics.kind],
+          ["intent", semantics.intent],
+          ["topic", semantics.topic],
+          ["target", routing.target?.agent_label || routing.target?.agent_id],
+          ["mentions", routing.mentions?.map((item) => item.display_text || item.mention_id || item).join(", ")],
+          ["assignees", routing.assignees],
+        ])}
+      </div>
+      <div class="detail-panel">
+        <div class="detail-panel-title">?? / ??</div>
+        ${renderKeyValueRows([
+          ["client_request_id", extensions.client_request_id],
+          ["outbound_correlation_id", extensions.outbound_correlation_id],
+          ["source", extensions.source],
+          ["custom", Object.keys(extensions.custom || {}).length ? extensions.custom : null],
+        ])}
+      </div>
+    </div>
+  `;
 }
 
 function getAgentMeta(agentId) {
@@ -271,7 +425,8 @@ function getMessageHeadline(item) {
     summary: "主持总结",
     meta: "系统消息",
   };
-  return typeMap[item.message_type] || item.message_type || "消息";
+  const kind = messageKind(item);
+  return typeMap[kind] || kind || "消息";
 }
 
 function setViewerBadge() {
@@ -409,29 +564,37 @@ function renderTasks(items = []) {
 
 function renderMessages(items = []) {
   el.messageList.innerHTML = "";
-  el.messageCountBadge.textContent = `${items.length} 条消息`;
+  el.messageCountBadge.textContent = `${items.length} items`;
   if (!items.length) {
-    el.messageList.innerHTML = `<div class="timeline-card-item"><div class="tiny-label">当前 group 暂无公开消息</div></div>`;
+    el.messageList.innerHTML = `<div class="timeline-card-item"><div class="tiny-label">No public messages in this group yet</div></div>`;
     return;
   }
 
   for (const item of items.slice().reverse()) {
-    const meta = getAgentMeta(item.agent_id);
+    const relations = messageRelations(item);
+    const semantics = messageSemantics(item);
+    const routing = messageRouting(item);
+    const authorId = messageAuthorId(item);
+    const kind = messageKind(item);
+    const meta = getAgentMeta(authorId);
     const createdLabel = formatRelativeTime(item.created_at) || formatDate(item.created_at);
     const tags = [
-      item.thread_id ? `THR-${String(item.thread_id).slice(0, 6).toUpperCase()}` : null,
-      item.task_id ? `TSK-${String(item.task_id).slice(0, 6).toUpperCase()}` : null,
-      item.parent_message_id ? `MSG-${String(item.parent_message_id).slice(0, 6).toUpperCase()}` : null,
+      semantics.intent ? `intent:${semantics.intent}` : null,
+      semantics.topic ? `topic:${semantics.topic}` : null,
+      routing.target?.agent_id ? `target:${routing.target.agent_label || routing.target.agent_id}` : null,
+      relations.thread_id ? `THR-${String(relations.thread_id).slice(0, 6).toUpperCase()}` : null,
+      relations.task_id ? `TSK-${String(relations.task_id).slice(0, 6).toUpperCase()}` : null,
+      relations.parent_message_id ? `MSG-${String(relations.parent_message_id).slice(0, 6).toUpperCase()}` : null,
     ].filter(Boolean);
     const avatarStyle = meta.accentColor ? `style="background:${escapeHtml(meta.accentColor)}"` : "";
     const node = document.createElement("article");
     node.className = "timeline-card-item";
-    node.dataset.type = item.message_type;
+    node.dataset.type = kind;
     node.innerHTML = `
       <div class="message-header">
         <div class="message-header-left">
           <div class="message-agent-line">
-            <button class="message-agent-trigger" type="button" data-agent-id="${escapeHtml(item.agent_id)}">
+            <button class="message-agent-trigger" type="button" data-agent-id="${escapeHtml(authorId)}">
               <span class="message-agent-main">
                 <span class="agent-avatar" ${avatarStyle}>${escapeHtml(meta.avatarText)}</span>
                 <strong>${escapeHtml(meta.name)}</strong>
@@ -445,11 +608,13 @@ function renderMessages(items = []) {
         </div>
         <div class="message-header-right">
           <span class="message-time">${escapeHtml(createdLabel)}</span>
-          <span class="data-chip">${escapeHtml(item.message_type)}</span>
+          <span class="data-chip">${escapeHtml(kind)}</span>
           <span class="status-pill ${escapeHtml(meta.state)}">${escapeHtml(meta.state)}</span>
         </div>
       </div>
-      <pre class="message-body">${escapeHtml(messageText(item.content))}</pre>
+      <div class="message-layer-title">Message Facts / Collaboration Semantics</div>
+      <pre class="message-body">${escapeHtml(messageText(item))}</pre>
+      ${renderMessageFactPanels(item)}
       ${tags.length ? `<div class="message-meta-strip">${tags.map((tag) => `<span class="message-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
     `;
     for (const trigger of node.querySelectorAll(".message-agent-trigger")) {
@@ -473,7 +638,7 @@ function renderAgentDetail() {
   const meta = getAgentMeta(state.selectedAgentId);
   const presence = state.presenceById.get(state.selectedAgentId);
   const messages = (state.snapshot?.latest_messages || [])
-    .filter((item) => item.agent_id === state.selectedAgentId)
+    .filter((item) => messageAuthorId(item) === state.selectedAgentId)
     .slice(-5)
     .reverse();
   const tasks = (state.snapshot?.tasks || []).filter((item) => item.claimed_by_agent_id === state.selectedAgentId);
@@ -542,11 +707,11 @@ function renderAgentDetail() {
             <span class="agent-avatar detail-avatar" ${avatarStyle}>${escapeHtml(meta.avatarText)}</span>
             <div class="agent-work-bubble message-bubble">
               <div class="row-between">
-                <span class="data-chip">${escapeHtml(item.message_type)}</span>
+                <span class="data-chip">${escapeHtml(messageKind(item))}</span>
                 <span class="message-time">${escapeHtml(formatRelativeTime(item.created_at) || formatDate(item.created_at))}</span>
               </div>
               <div class="meta-line">${escapeHtml(getMessageHeadline(item))}</div>
-              <div class="summary-note">${escapeHtml(messageText(item.content))}</div>
+              <div class="summary-note">${escapeHtml(messageText(item))}</div>
             </div>
           </div>
         `).join("") : `<div class="agent-work-item"><div class="tiny-label">当前没有最近消息</div></div>`}
@@ -555,10 +720,61 @@ function renderAgentDetail() {
   `;
 }
 
+function renderEventDetail(event) {
+  const message = eventMessageOf(event);
+  const runtime = runtimeResultOf(event);
+  const receipt = eventReceiptOf(event);
+  const canonicalized = eventCanonicalizedMessageOf(event);
+  const actor = compactAgentId(event.actor_agent_id);
+  const messagePanels = message ? renderMessageFactPanels(message) : "";
+  const runtimePanel = renderRuntimePanel(runtime);
+  const receiptPanel = receipt
+    ? `
+      <div class="detail-panel">
+        <div class="detail-panel-title">Receipt / Debug</div>
+        ${renderKeyValueRows([
+          ["status", receipt.status],
+          ["client_request_id", receipt.client_request_id],
+          ["community_message_id", receipt.community_message_id],
+          ["thread_id", receipt.thread_id],
+          ["non_intake", receipt.non_intake],
+          ["debug", receipt.debug],
+          ["validator_result", receipt.validator_result],
+          ["projection_result", receipt.projection_result],
+        ])}
+      </div>
+    `
+    : "";
+  const canonicalizedPanel = canonicalized
+    ? `
+      <div class="detail-panel">
+        <div class="detail-panel-title">Canonicalized Message</div>
+        <pre class="message-body detail-pre">${escapeHtml(formatCompactJson(canonicalized))}</pre>
+      </div>
+    `
+    : "";
+
+  return `
+    <div class="summary-event">
+      <div class="event-seq">SEQ ${escapeHtml(String(event.sequence_id))}</div>
+      <strong>${escapeHtml(event.event_type)}</strong>
+      <div class="summary-note">${escapeHtml(actor)} ? ${escapeHtml(formatRelativeTime(event.created_at))} ? ${escapeHtml(formatDate(event.created_at))}</div>
+      ${messagePanels || receiptPanel || runtimePanel || canonicalizedPanel ? `
+        <div class="summary-event-sections">
+          ${messagePanels}
+          ${receiptPanel}
+          ${runtimePanel}
+          ${canonicalizedPanel}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
 function renderSummary(snapshot) {
   const hostSummary = snapshot.host_summary && Object.keys(snapshot.host_summary).length
     ? snapshot.host_summary
-    : { note: "当前还没有主持总结。" };
+    : { note: "No host summary yet." };
   const recentEvents = (snapshot.latest_events || []).slice(-6).reverse();
   const note = typeof hostSummary.note === "string"
     ? hostSummary.note
@@ -567,25 +783,21 @@ function renderSummary(snapshot) {
   el.summaryBox.innerHTML = `
     <div class="summary-grid">
       <div class="summary-card">
-        <strong>当前组状态</strong>
-        <div class="summary-note">在线 ${escapeHtml(String((snapshot.online_members || []).length))} 人，任务 ${escapeHtml(String((snapshot.tasks || []).length))} 个，消息 ${escapeHtml(String((snapshot.latest_messages || []).length))} 条。</div>
+        <strong>Group Status</strong>
+        <div class="summary-note">Online ${escapeHtml(String((snapshot.online_members || []).length))}, tasks ${escapeHtml(String((snapshot.tasks || []).length))}, messages ${escapeHtml(String((snapshot.latest_messages || []).length))}.</div>
       </div>
       <div class="summary-card">
-        <strong>回放游标</strong>
-        <div class="summary-note">${escapeHtml(snapshot.replay_cursor == null ? "暂无事件" : String(snapshot.replay_cursor))}</div>
+        <strong>Replay Cursor</strong>
+        <div class="summary-note">${escapeHtml(snapshot.replay_cursor == null ? "No events yet" : String(snapshot.replay_cursor))}</div>
       </div>
     </div>
     <div class="summary-card">
-      <strong>主持摘要</strong>
+      <strong>Host Summary</strong>
       <div class="summary-note">${escapeHtml(note)}</div>
+      ${hostSummary && hostSummary.container ? renderMessageFactPanels(hostSummary) : ""}
+      ${hostSummary && hostSummary.runtime ? renderRuntimePanel(hostSummary.runtime) : ""}
     </div>
-    ${recentEvents.map((event) => `
-      <div class="summary-event">
-        <div class="event-seq">SEQ ${escapeHtml(String(event.sequence_id))}</div>
-        <strong>${escapeHtml(event.event_type)}</strong>
-        <div class="summary-note">${escapeHtml(compactAgentId(event.actor_agent_id))} · ${escapeHtml(formatRelativeTime(event.created_at))} · ${escapeHtml(formatDate(event.created_at))}</div>
-      </div>
-    `).join("")}
+    ${recentEvents.map((event) => renderEventDetail(event)).join("")}
   `;
 }
 
@@ -779,10 +991,10 @@ async function postMessage(event) {
   await request("/messages", {
     method: "POST",
     body: JSON.stringify({
-      group_id: state.activeGroup.id,
-      task_id: el.messageTaskIdInput.value.trim() || null,
-      message_type: el.messageTypeInput.value,
-      content: { text: el.messageTextInput.value.trim() },
+      container: { group_id: state.activeGroup.id },
+      relations: { task_id: el.messageTaskIdInput.value.trim() || null },
+      body: { text: el.messageTextInput.value.trim() },
+      semantics: { kind: el.messageTypeInput.value },
     }),
   });
   el.messageTextInput.value = "";

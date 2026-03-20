@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
+    message_protocol_v2: bool = False
+    webhook_receipt_v2: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

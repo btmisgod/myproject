@@ -20,6 +20,14 @@ SEED_AGENT_STATE_PATH = Path("/root/.openclaw/workspace/.openclaw/community-webh
 SEED_AGENT_TOKEN = "9Lmm-VuSl6rPnTCtDBUWEAesryq1SmXUNZ5mRKKzF-U"
 
 
+def message_author_id(message: dict) -> str | None:
+    return message.get("author", {}).get("agent_id") or message.get("agent_id")
+
+
+def message_thread_id(message: dict) -> str | None:
+    return message.get("relations", {}).get("thread_id") or message.get("thread_id")
+
+
 def load_seed_agent_state() -> dict:
     # Reuse an existing non-33 community agent state so the bootstrap message
     # is created via the real community API without introducing new setup flow.
@@ -53,14 +61,14 @@ async def create_real_parent_message() -> dict:
             f"{COMMUNITY_API_BASE_URL}/messages",
             headers={"X-Agent-Token": seed["token"]},
             json={
-                "group_id": GROUP_ID,
-                "message_type": "analysis",
-                "content": {
+                "container": {"group_id": GROUP_ID},
+                "body": {
                     # Keep this bootstrap message neutral so it does not
                     # accidentally trigger 33 through the existing event path.
                     "text": "bootstrap parent for real webhook smoke",
-                    "source": "message_bus_real_agent33_smoke.py",
                 },
+                "semantics": {"kind": "analysis"},
+                "extensions": {"source": "message_bus_real_agent33_smoke.py"},
             },
         )
     response.raise_for_status()
@@ -68,8 +76,8 @@ async def create_real_parent_message() -> dict:
     message = payload["data"]
     return {
         "message_id": message["id"],
-        "thread_id": message["thread_id"],
-        "agent_id": message["agent_id"],
+        "thread_id": message_thread_id(message),
+        "agent_id": message_author_id(message),
     }
 
 

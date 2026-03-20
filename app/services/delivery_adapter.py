@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import httpx
 
 from app.services.message_envelope import DeliveryResult, DeliveryTarget, MessageEnvelope
+from app.services.message_protocol_mapper import normalize_message_to_canonical_v2
 
 
 # Delivery adapters are downstream executors for Message Bus routing results.
@@ -62,6 +63,10 @@ class WebhookDeliveryAdapter:
         )
 
     def _build_payload(self, envelope: MessageEnvelope, target: DeliveryTarget) -> dict[str, Any]:
+        payload_override = target.metadata.get("payload_override") if isinstance(target.metadata, dict) else None
+        if isinstance(payload_override, dict):
+            return payload_override
+
         message_content = dict(envelope.payload)
         message_content.setdefault("metadata", {})
         if not isinstance(message_content["metadata"], dict):
@@ -110,14 +115,48 @@ class WebhookDeliveryAdapter:
                     "protocol_reroute_suggest"
                 )
 
-        message = {
-            "id": envelope.message_id,
-            "group_id": envelope.channel_id,
-            "agent_id": envelope.source_agent,
-            "thread_id": envelope.thread_id,
-            "message_type": envelope.payload.get("message_type", "analysis"),
-            "content": message_content,
-        }
+        message = normalize_message_to_canonical_v2(
+            {
+                "id": envelope.message_id,
+                "container": {"group_id": envelope.channel_id},
+                "author": {"agent_id": envelope.source_agent},
+                "relations": {
+                    "thread_id": envelope.thread_id,
+                    "parent_message_id": envelope.payload.get("parent_message_id"),
+                    "task_id": envelope.payload.get("task_id"),
+                },
+                "body": {
+                    "text": message_content.get("text"),
+                    "blocks": message_content.get("blocks") if isinstance(message_content.get("blocks"), list) else [],
+                    "attachments": (
+                        message_content.get("attachments")
+                        if isinstance(message_content.get("attachments"), list)
+                        else []
+                    ),
+                },
+                "semantics": {
+                    "kind": envelope.payload.get("message_type", "analysis"),
+                    "intent": message_content.get("intent") or message_metadata.get("intent"),
+                },
+                "routing": {
+                    "target": {
+                        "scope": "agent" if message_metadata.get("target_agent_id") else None,
+                        "agent_id": message_metadata.get("target_agent_id"),
+                        "agent_label": message_metadata.get("target_agent"),
+                    },
+                    "mentions": message_content.get("mentions") if isinstance(message_content.get("mentions"), list) else [],
+                    "assignees": message_metadata.get("assignees") if isinstance(message_metadata.get("assignees"), list) else [],
+                },
+                "extensions": {
+                    "client_request_id": message_metadata.get("client_request_id"),
+                    "outbound_correlation_id": (
+                        message_metadata.get("outbound_correlation_id") or message_metadata.get("idempotency_key")
+                    ),
+                    "source": message_content.get("source"),
+                    "custom": message_metadata,
+                },
+            }
+        )
         event = {
             "sequence_id": 0,
             "event_id": envelope.message_id,
@@ -133,7 +172,8 @@ class WebhookDeliveryAdapter:
             "event": event,
             "entity": {"message": message},
             "projection_type": "group_event",
-            "version": 1,
+            "projection": {"type": "group_event", "version": 2},
+            "version": 2,
             "group_id": envelope.channel_id,
             "delivery_target": asdict(target),
         }
