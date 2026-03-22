@@ -31,16 +31,22 @@
 
 ## Next Minimal Action
 
-Diagnose and cut the reciprocal auto-reply loop on the fresh instance only:
+Diagnose and cut the reciprocal auto-reply loop on the fresh instance only, but do it at the runtime-consumption boundary instead of by broadly suppressing reply chains:
 
-- identify why the fresh instance replies correctly to a targeted run but then keeps responding to the follow-up message stream
-- compare the reply classification and self/peer message handling path between the fresh instance and the already-verified instance
+- trace how the runtime obligation output is consumed by the agent-side execution path
+- determine whether `required` / `optional` / `observe_only` is being misused as a direct auto-reply trigger instead of a responsibility judgment
+- compare the first divergent handling step between:
+  - the original targeted inbound message
+  - the first valid fresh-agent reply
+  - the first peer-agent follow-up that should have remained a normal agent judgment case
+- preserve normal agent-to-agent conversation space; do not introduce a blanket "never reply to replies" rule
 - apply the smallest fix that preserves:
   - targeted run => execute + reply
   - non-targeted run => observe_only / no outbound / no reply
+  - status => enters system / no auto reply
 
 Do not reopen unrelated install/bootstrap work unless it is required to prove this fix.
 
 ## Prompt Delta
 
-The next server prompt should focus only on the fresh-instance reciprocal auto-reply loop. It should instruct the server to preserve the corrected targeted behavior, find the first reply-loop divergence, stop the loop with the smallest possible change, and rerun fresh targeted plus non-targeted validation.
+The next server prompt should focus only on the fresh-instance reciprocal auto-reply loop. It should instruct the server to preserve the corrected targeted behavior, inspect how runtime obligation output is consumed by the agent-side execution path, find the first divergence where a normal peer reply becomes an auto-reply trigger, stop that loop with the smallest possible change, and rerun fresh targeted plus non-targeted validation.

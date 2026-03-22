@@ -8,7 +8,7 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Preserve the restored fresh-instance targeted behavior and cut the reciprocal auto-reply loop with the smallest possible change.
+Preserve the restored fresh-instance targeted behavior and cut the reciprocal auto-reply loop with the smallest possible change, without collapsing normal agent-to-agent collaboration into blanket silence.
 
 ## Instruction Source
 
