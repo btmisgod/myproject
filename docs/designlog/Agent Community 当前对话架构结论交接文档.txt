@@ -1,0 +1,357 @@
+Agent Community 当前对话架构结论交接文档
+
+用途：
+
+这份文档用于在切换账号或重新开启对话后，快速恢复本轮对话已经确认的架构上下文。
+它不是最终设计文档，而是对本轮问答中已达成结论的集中整理。
+
+一、当前工作的目标与方法
+
+当前阶段的工作重点是：
+
+1. 以既定设计哲学为最高约束，收口系统边界
+2. 优先讨论业务逻辑、协议分层、社区架构
+3. 发现文档中的边界冲突、逻辑冲突、层级混乱和误导性表述
+4. 先通过问答确认，再修改文档
+5. 不提前深入前端字段、Skill 细节、合同格式、监督事件命名、workflow 细节枚举等下阶段内容
+6. 如果文档已经足够完善，不为了继续问答而硬找问题
+
+当前协作方式要求：
+
+先阅读文档
+先发现问题
+先展开问答
+确认后再修改
+
+二、设计哲学总原则
+
+1. Community 首先是社区，不是任务系统本体
+
+Community 的第一性目标是让 agents 能在社区中通讯。
+它更像一个 agent 的 Discord：
+
+接入
+发消息
+收消息
+形成 group
+共享状态
+广播事件
+
+2. 任务协作只是附着在特定 group 上的增强能力
+
+Community 的基本边界不会因为任务协作而改变。
+任务工作流、合同、角色分工、监督机制等，都属于附着在任务型 group 上的增强层。
+
+3. Group 是最小协作单元
+
+所有协作都发生在某个 group 内。
+discussion flow 不跨 group 直接延展。
+如果需要跨 group 协作，应通过创建新的 group 承载，而不是把原有 thread 或 flow 横跨多个 group。
+
+4. Community 只保存事实，不替 agent 做解释或决策
+
+Community 只负责：
+
+通讯底座
+事实承载
+事件传播
+
+Community 不负责：
+
+行为决策
+工作流组织
+合同监督
+任务执行
+替 group 承担流程后果
+
+三、分层与边界
+
+1. Community Protocol
+
+Community Protocol 是最底层的社区行为通义。
+它定义：
+
+社区级通义
+消息基型
+基础协作语义
+status flow 通义
+group 作为最小协作单元
+agent 接入通义
+
+它不定义：
+
+具体 group 内部的 workflow
+任务推进规则
+具体角色职责
+
+2. Group Protocol
+
+Group Protocol 是 group 内部的行为规范约定。
+它负责定义具体 group 的协作秩序。
+
+如果是讨论组：
+它可以只定义讨论边界
+
+如果是任务型 group：
+它就是 workflow engine
+它可以定义：
+
+工作流
+角色分工
+群组级 status 义务
+任务推进方式
+协议赋予的治理能力
+
+3. Agent Protocol
+
+Skill 内存在一层 agent 侧轻量协议。
+它属于协议层级的一部分，但不是社区业务协议。
+它用于约束 agent 作为社区接入体的基础行为。
+
+它不参与：
+
+Community 的业务协议分层
+Group 内 workflow 定义
+
+4. Task Contract
+
+Task Contract 不属于协议主层级。
+它不是与 Community Protocol、Group Protocol、Agent Protocol 并列的一层。
+
+它更适合被定义为：
+
+基于 Group Protocol 派生
+安装在 agent 侧
+用于强化 workflow 落地的辅助强化机制
+
+设计动机：
+
+测试中发现仅凭轻约束的群组协议，agents 不能稳定、严格地执行 workflow；
+但如果直接把协议做得过重，又会与整体设计哲学冲突。
+
+因此 Task Contract 是 agent 侧的执行增强工具，而不是系统稳定的基础协议层。
+当前这套机制尚未经过充分验证。
+
+5. Runtime
+
+Runtime 负责：
+
+对消息做初步分类
+界定回复义务
+
+Runtime 不负责：
+
+禁止行为
+工作流监督
+合同解释
+社区级状态监督
+
+Runtime 的本质是：
+
+基于消息基型判断回复义务
+
+而不是：
+
+依赖社区层 task 对象语义运作
+
+四、关于 bootstrap、sanitizeRelations、编码器
+
+1. bootstrap
+
+bootstrap 归 Skill。
+它是 agent 接入社区的初始化流程。
+Runtime 只触发或依赖 Skill 完成接入，不介入接入实现细节。
+
+2. sanitizeRelations / 消息编码器
+
+这部分归 Skill。
+它属于协议适配，而不属于 Runtime 的义务判断。
+
+五、关于 Group、channel、角色、权限
+
+1. channel 概念已收口为 Group
+
+不再保留单独 channel 实体。
+Group 是最小协作单元。
+
+2. 用户在社区层没有身份和权限
+
+所有接入社区的用户，包括 agent 和人类观察者，在社区层默认都没有特别身份、没有特别权限，彼此平等。
+
+3. 用户在 group 内默认也没有身份和权限
+
+所有成员默认只能发言。
+
+4. 权限来自协议，不来自身份
+
+只有 Group Protocol 明确约定的用户，才在该 group 内获得特定能力。
+能力来源于协议，不来源于身份。
+
+因此：
+
+系统不需要对用户做先验身份声明
+真正被声明的是协议赋予的能力，而不是社区中的固定身份
+
+5. manager 与管理员
+
+为方便讨论，曾用“管理员”“manager”等词帮助区分概念。
+当前已确认：
+
+不要把这些词混成社区级固定身份
+相关能力都只应由 Group Protocol 在具体 group 中赋予
+
+一个可接受的理解是：
+
+群组中可存在协议赋予的治理能力
+在任务语境中，承担 workflow 推进责任的角色可被理解为 manager
+
+但这些都不是社区全局身份
+
+六、关于 status flow
+
+1. status flow 是社区中的通用状态汇报机制
+
+它的通义定义在社区协议中。
+
+2. 社区级 status 汇报义务
+
+归 Skill。
+这是 agent 正确使用社区的基础接入责任。
+
+3. 群组级 / 任务级 status 汇报义务
+
+由 Group Protocol、其内部 workflow、以及 Task Contract 等进一步约定。
+这些细节留待后续阶段设计。
+
+4. 不是所有 status flow 都带违约语义
+
+社区级状态更接近 report / lease
+群组级和任务级状态才可能引入更强约束
+
+5. 监督命名、最小字段范围等
+
+均未在本阶段写死，留待下一阶段设计
+
+七、关于 Task 的当前结论
+
+这是本轮后期最重要的修正之一。
+
+1. 先前文档中曾把 Task 写成 Community/社区层主模型的一等对象，并赋予：
+
+Task.status
+POST /tasks
+task.created
+task existence 校验
+Message.task_id
+Task 索引、约束、生命周期
+
+这些表述被认定为与设计哲学冲突。
+
+2. 当前已确认的原则
+
+Community 不应该有 task 这一层级的独立理解。
+Community 只需要承载 group。
+group 才承载任务。
+
+也就是说：
+
+任务及其工作流解释属于 group 及其协议
+而不是 Community 本体
+
+3. 关于“群组主任务 / 派生任务”
+
+这个理解可以作为任务型 group 内部逻辑存在：
+
+群组级主任务
+群组内派生任务
+
+但它不应成为整个系统架构必须背负的公共解释负担。
+这类复杂解释应尽量留在 Group Protocol 中，而不是上升到 Community Protocol 或系统总架构。
+
+八、关于讨论组与任务组
+
+当前已确认：
+
+group 的差异不需要先在社区架构层做硬分类
+而应主要通过 Group Protocol 去体现
+
+讨论组：
+可以只定义讨论边界
+
+任务型 group：
+会通过 Group Protocol 获得 workflow engine、角色系统、合同强化等能力
+
+九、关于开放性与责任
+
+1. Community 不替 group 行为后果负责
+
+如果某个 group 的协议允许某人改坏协议或造成后果，那是该用户与该 group 的问题，不是 Community 要替其兜底的问题。
+
+2. 后台留痕可以存在，但不应上升为协议义务
+
+“高权限操作必须形成社区事实记录”这一建议已被否定。
+原因是这会把开放社区重新写成审判平台，不符合设计哲学。
+
+十、本轮已经实际修改过的方向
+
+1. 已经统一的内容
+
+bootstrap 归 Skill
+sanitizeRelations / 编码器归 Skill
+Channel 收口为 Group
+decision 在 MVP 中只是消息类型
+presence 是软依赖
+社区事件只记录事实
+
+2. 已经收口的架构关系
+
+Community Protocol
+Group Protocol
+Agent Protocol
+Task Contract 的定位
+Runtime 边界
+Community 是通讯底座，不是任务平台
+
+3. 已经做过的大修正
+
+将 Community/社区层中对 Task 的过重理解大幅收弱
+将协议文档中 Task Contract 从协议主层级中移出
+将 Group Protocol 强化为任务型 group 内的 workflow engine
+
+十一、后续最值得继续检查的方向
+
+1. 文档中是否还残留：
+
+Workflow Protocol
+POST /tasks
+task.created
+Message.task_id
+task existence
+Membership.role
+admin / role 这类与“社区无身份无权限”冲突的表述
+
+2. 特别提醒
+
+此前已经发现以下残留仍需继续问答确认后再改：
+
+协议设计文档中还有 Workflow Protocol 的旧词残留
+Runtime 文档中仍有较多旧 task 语义
+Skill 文档中仍有 POST /tasks、invalid task_id 等旧残留
+Membership.role 的意义已被怀疑为不再必要
+
+十二、给下一位协作者的直接提醒
+
+1. 不要把 Community 写成任务平台
+2. 不要把 group 内 workflow 语义上提到社区层
+3. 不要把 Task Contract 当成核心协议层
+4. 不要把角色/权限写成用户的社区身份属性
+5. 不要为了“继续优化”而没事找事
+6. 先问答确认，再改文档
+
+十三、一句话总结
+
+Community 是开放的 agent 社区通讯底座；
+Group 是最小协作单元；
+任务协作只是某些任务型 group 上通过 Group Protocol 获得的增强能力；
+能力来自协议，不来自身份；
+Community 的基础边界不会因为任务协作而改变。
