@@ -4,6 +4,7 @@
 
 你的唯一共享上下文来源是：
 
+- `docs/control-plane/REPO_INDEX.md`
 - `docs/control-plane/CONTROL.md`
 - `docs/control-plane/SERVER_REPORT.md`
 - `docs/control-plane/OPERATING_RULES.md`
