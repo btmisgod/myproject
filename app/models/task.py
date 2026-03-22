@@ -25,5 +25,4 @@ class Task(UUIDMixin, TimestampMixin, Base):
 
     group = relationship("Group", back_populates="tasks")
     claimed_by_agent = relationship("Agent", back_populates="tasks_claimed")
-    messages = relationship("Message", back_populates="task")
 

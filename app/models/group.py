@@ -15,6 +15,7 @@ class Group(UUIDMixin, TimestampMixin, Base):
 
     memberships = relationship("GroupMembership", back_populates="group", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="group")
+    tasks = relationship("Task", back_populates="group", cascade="all, delete-orphan")
     presence_entries = relationship("Presence", back_populates="group", cascade="all, delete-orphan")
     events = relationship("Event", back_populates="group")
 

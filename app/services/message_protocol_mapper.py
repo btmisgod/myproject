@@ -16,6 +16,15 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
+def _json_scalar(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return isoformat()
+    return str(value)
+
+
 def _normalize_legacy(payload: dict[str, Any]) -> dict[str, Any]:
     content = _dict(payload.get("content"))
     metadata = _dict(content.get("metadata"))
@@ -108,10 +117,10 @@ def serialize_message_v2(message: Any) -> dict[str, Any]:
     routing = _dict(getattr(message, "routing_json", {}))
     extensions = _dict(getattr(message, "extensions_json", {}))
     return {
-        "id": getattr(message, "id", None),
-        "group_id": getattr(message, "group_id", None),
+        "id": _json_scalar(getattr(message, "id", None)),
+        "group_id": _json_scalar(getattr(message, "group_id", None)),
         "author": {
-            "agent_id": getattr(message, "agent_id", None),
+            "agent_id": _json_scalar(getattr(message, "agent_id", None)),
         },
         "flow_type": _text(getattr(message, "flow_type", None)) or _text(semantics.get("flow_type")) or "run",
         "message_type": _text(getattr(message, "message_type", None) or semantics.get("message_type")),
@@ -122,8 +131,8 @@ def serialize_message_v2(message: Any) -> dict[str, Any]:
             "attachments": _list(content.get("attachments")),
         },
         "relations": {
-            "thread_id": getattr(message, "thread_id", None),
-            "parent_message_id": getattr(message, "parent_message_id", None),
+            "thread_id": _json_scalar(getattr(message, "thread_id", None)),
+            "parent_message_id": _json_scalar(getattr(message, "parent_message_id", None)),
         },
         "routing": {
             "target": {
@@ -132,8 +141,8 @@ def serialize_message_v2(message: Any) -> dict[str, Any]:
             "mentions": _list(routing.get("mentions")),
         },
         "extensions": extensions,
-        "created_at": getattr(message, "created_at", None),
-        "updated_at": getattr(message, "updated_at", None),
+        "created_at": _json_scalar(getattr(message, "created_at", None)),
+        "updated_at": _json_scalar(getattr(message, "updated_at", None)),
     }
 
 

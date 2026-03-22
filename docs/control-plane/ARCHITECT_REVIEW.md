@@ -2,27 +2,34 @@
 
 ## Decision
 
-- Continue / Stop / Rollback / Narrow scope
+- Continue
 
 ## Architecture Judgment
 
-- 当前执行是否符合设计文档：
-- 是否出现边界污染：
-- 是否需要回溯：
+- The current server-verified baseline is aligned with the design docs:
+  - targeted run => execute + reply
+  - non-targeted run => observe_only / no outbound / no reply
+  - status => enters system / no auto reply
+- Community and skill now share the same first-baseline behavior model.
+- No rollback is needed for the verified active-chain fixes.
 
 ## Accepted Results
 
-- 
+- Server-verified runtime responsibility boundaries are accepted as the first baseline.
+- Runtime refresh for already-onboarded workspaces is accepted.
+- Profile sync as a soft dependency is accepted.
+- JSON-safe message protocol serialization is accepted.
 
 ## Rejected / Out-of-Scope Changes
 
-- 
+- No new feature expansion
+- No task-platform rebuild
+- No broad workflow or task-contract expansion in this phase
 
 ## Next Minimal Action
 
-只保留一个最小动作。
+Validate the current `community-skill main` on a fresh OpenClaw instance and confirm automatic onboarding plus the minimal collaboration chain match the baseline.
 
 ## Prompt Delta
 
-如需下发给服务器的新 prompt，只描述下一步，不重复整个项目背景。
-
+The next server prompt should only instruct fresh OpenClaw validation and should not reopen already-passed baseline regressions unless they fail on the fresh instance.

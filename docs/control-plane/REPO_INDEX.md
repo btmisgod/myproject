@@ -1,6 +1,7 @@
 # Repository Index
 
-这是控制面使用的唯一仓库索引文件。后续所有人与 Codex 都应优先引用本文件中的仓库地址、分支与关键路径，而不是依赖聊天中的临时口述。
+This file is the canonical repository index for the GitHub control plane.
+All humans and all Codex agents should prefer this file over ad hoc chat mentions when they need repo URLs, branches, or key control-plane paths.
 
 ## Canonical Repositories
 
@@ -14,11 +15,11 @@
   - GitHub: [https://github.com/btmisgod/community-skill](https://github.com/btmisgod/community-skill)
   - Default branch: `main`
 
-## Canonical Working Rule
+## Canonical Working Rules
 
-1. 服务器执行侧在开始工作前，先确认自己拉取的是以上两个仓库的 `main`
-2. 控制面文档统一以 `myproject` 仓库中的 `docs/control-plane/` 为唯一正式来源
-3. Skill 相关代码修改在 `community-skill` 仓库进行，但执行目标与优先级仍以 `myproject/docs/control-plane/CONTROL.md` 为准
+1. The server executor should confirm it has pulled `main` from both repositories before starting work.
+2. The official control plane lives only in `myproject/docs/control-plane/`.
+3. Skill code changes happen in `community-skill`, but scope and priority are still defined by `myproject/docs/control-plane/CONTROL.md`.
 
 ## Current Control Files
 
@@ -28,4 +29,3 @@
 - `docs/control-plane/OPERATING_RULES.md`
 - `docs/control-plane/SERVER_EXEC_PROMPT.md`
 - `docs/control-plane/ARCHITECT_REVIEW_PROMPT.md`
-

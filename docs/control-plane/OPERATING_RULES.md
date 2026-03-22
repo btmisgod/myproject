@@ -2,35 +2,35 @@
 
 ## Shared Rules
 
-1. 所有判断以 `docs/designlog/` 中的设计文档为最高依据。
-2. 服务器执行侧只解决当前目标，不主动扩展功能。
-3. 产品总监侧只下发一个当前唯一目标。
-4. 所有修复优先活链，再清理残留代码。
-5. 所有结论必须带证据：
+1. `docs/designlog/` is the highest source of truth.
+2. The server executor solves only the current active objective and does not expand scope on its own.
+3. The architect side defines only one current active objective at a time.
+4. Fix active-chain issues before cleaning dead or dormant code.
+5. Every important conclusion must include evidence:
    - commit id
-   - 文件路径
-   - 日志
-   - 测试命令与结果
-6. 用户在主对话中下达的新指令，必须先由产品总监侧 Codex 同步进控制面文档，再由服务器执行侧读取执行。
-7. 服务器执行侧不直接消费聊天记录，只消费 GitHub 控制面文档。
-8. 轮询应足够高频以保持任务连续性，但不得粗暴打断当前主进程。
+   - file path
+   - logs
+   - test command and result
+6. User instructions from the main chat must be synced into control-plane docs by the architect Codex before the server acts on them.
+7. The server executor does not consume chat logs directly. It consumes GitHub control-plane docs.
+8. Poll frequently enough to maintain continuity, but do not interrupt a heavy in-flight process aggressively.
 
 ## Server Codex Rules
 
-- 优先最小修复
-- 先修活链，再跑回归
-- 不擅自重构大块架构
-- 如果失败，只给一个阻塞点
-- 默认每 `2 分钟` 检查一次 `CONTROL.md`
-- 如果正在运行较重命令或测试，应在当前安全检查点完成后立即刷新控制面文档
-- 若 `CONTROL.md` 未变化，则继续当前唯一目标，不得自行切换方向
+- Prefer the smallest possible fix
+- Fix the active chain before running regression
+- Do not perform broad refactors without control-plane approval
+- If something fails, report exactly one current blocker
+- Poll `CONTROL.md` every 2 minutes by default
+- If a heavy command or test is running, refresh at the next safe checkpoint
+- If `CONTROL.md` did not change, continue the current objective rather than switching direction
 
 ## Architect Codex Rules
 
-- 优先判断是否符合设计
-- 不把临时热修误写成正式架构
-- 不同时打开多个产品/架构议题
-- 只给服务器一个最小下一步动作
-- 默认每 `2 分钟` 检查一次 `SERVER_REPORT.md`
-- 用户在主对话中的新指令，必须尽快同步到 `CONTROL.md` 或 `ARCHITECT_REVIEW.md`
-- 如果用户直接在主对话中改目标，以用户最新指令为准，并立即更新控制面
+- Judge work first by design-doc alignment
+- Do not promote temporary hotfix wording into official architecture
+- Do not open multiple product or architecture directions at once
+- Give the server exactly one next minimal action
+- Poll `SERVER_REPORT.md` every 2 minutes by default
+- Sync new user instructions into `CONTROL.md` or `ARCHITECT_REVIEW.md` quickly
+- If the user changes the objective in chat, update the control plane immediately and treat the latest user instruction as canonical
