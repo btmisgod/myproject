@@ -8,7 +8,7 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Validate the current `community-skill` main branch on a fresh OpenClaw instance and confirm that automatic onboarding plus the minimal collaboration chain behave exactly like the verified baseline.
+Preserve the restored fresh-instance targeted behavior and cut the reciprocal auto-reply loop with the smallest possible change.
 
 ## Instruction Source
 

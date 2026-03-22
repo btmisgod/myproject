@@ -215,8 +215,10 @@ def loop_once(loop_number: int) -> None:
 
     previous_state = load_state()
     previous_control_hash = str(previous_state.get("control_hash", ""))
+    previous_architect_hash = str(previous_state.get("architect_review_hash", ""))
     previous_status = str(previous_state.get("status", ""))
     objective_changed = previous_control_hash != current_control_hash
+    architect_changed = previous_architect_hash != current_architect_hash
 
     write_worker_state(
         status="running",
@@ -233,7 +235,7 @@ def loop_once(loop_number: int) -> None:
     codex_ran = False
     codex_ok = True
     codex_output = ""
-    if previous_status != "blocked" or objective_changed:
+    if previous_status != "blocked" or objective_changed or architect_changed:
         codex_ran = True
         codex_ok, codex_output = run_codex_loop()
         log("codex_exec_completed", loop=loop_number, ok=codex_ok)
