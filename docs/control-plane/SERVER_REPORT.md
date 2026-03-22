@@ -26,13 +26,19 @@
 - Current blocker: `none`
 - Codex objective step ran this loop: `true`
 
+## Phase Summary
+
+- phase_success: `true`
+- fresh_single_agent_acceptance: `passed`
+- deferred_issue: `reciprocal multi-agent reply loop remains a later-stage issue and is not the current phase gate`
+
 ## Current Active Objective
 
 Validate the fresh OpenClaw installation path and confirm that a newly installed `community-skill` instance can complete automatic onboarding and use the community baseline correctly in a single-agent acceptance path. Do not treat reciprocal multi-agent reply-loop behavior as a gating blocker in this phase.
 
 ## Work Performed
 
-- Pulled latest `myproject main` to `6ddeafe50daf4a41b50d555112ecd9d1d8ec800a`
+- Pulled latest `myproject main` to `8354e588f81055d9a3be8190cd8db2c3df8ec51f`
 - Re-read:
   - `docs/control-plane/REPO_INDEX.md`
   - `docs/control-plane/CONTROL.md`
@@ -80,21 +86,22 @@ Validate the fresh OpenClaw installation path and confirm that a newly installed
 - Targeted baseline with inert admin sender:
   - Result: passed
   - Evidence from fresh webhook log:
-    - `obligation.required reason: targeted_to_self`
-    - `decision.action: brief_reply`
-    - reply message id: `4fc594cc-00ba-4160-ac52-d89f1108df5c`
-    - reply thread id / parent id: `fd9502f0-6054-48dd-9a69-c7dc5398794d`
+    - rerun reply message id: `85ac6c1e-f487-4bd3-b99d-845a8ec4c4d8`
+    - rerun reply thread id / parent id: `dfecdb1e-2f6f-4c24-a2b2-3be9b0d2dc51`
+    - `extensions.custom.responsibility_reason: targeted_to_self`
   - Evidence from `openclaw-33` log:
-    - same event observed as `optional_collaboration`
+    - same rerun event observed as `optional_collaboration`
     - `decision.action: observe_only`
 - Non-targeted baseline with inert admin sender:
   - Result: passed
   - Evidence from fresh webhook log:
+    - rerun at `2026-03-22T18:23:25Z`
     - `obligation.optional reason: visible_collaboration`
     - `decision.action: observe_only`
 - Status baseline with inert admin sender:
   - Result: passed
   - Evidence from fresh webhook log:
+    - rerun at `2026-03-22T18:23:38Z`
     - `category: status`
     - `obligation.observe_only reason: status_facility`
     - `decision.action: observe_only`
@@ -102,7 +109,7 @@ Validate the fresh OpenClaw installation path and confirm that a newly installed
 ## Logs / Evidence
 
 - Control-plane commit evidence:
-  - `myproject`: `6ddeafe50daf4a41b50d555112ecd9d1d8ec800a`
+  - `myproject`: `8354e588f81055d9a3be8190cd8db2c3df8ec51f`
   - `community-skill`: `71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285`
 - Control-plane hash evidence:
   - `CONTROL.md` sha256: `573a7f3d58f460c01518ec6cae26e5f018e97472c7e985558bfb645ba0121af6`
@@ -120,6 +127,7 @@ Validate the fresh OpenClaw installation path and confirm that a newly installed
   - old reciprocal multi-agent loop blocker was de-scoped for this phase exactly as instructed
   - fresh single-agent acceptance started immediately on the existing fresh workspace
   - skill install, onboarding, webhook / group join, targeted baseline, non-targeted baseline, and status baseline all passed on the fresh single-agent path
+  - this phase now meets the success rule for one fresh instance
 - Failed:
   - none in this phase
 
@@ -129,4 +137,4 @@ None for the current fresh single-agent acceptance phase.
 
 ## Recommendation
 
-Mark the fresh single-agent acceptance phase successful and move to retrospective review preparation. Keep the reciprocal multi-agent reply loop recorded only as a later-stage issue, not as the current gate.
+Mark the fresh single-agent acceptance phase successful and move to retrospective review preparation. Keep the reciprocal multi-agent reply loop recorded only as a deferred later-stage issue, not as the current gate.
