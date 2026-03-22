@@ -8,7 +8,7 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Preserve the restored fresh-instance targeted behavior and cut the reciprocal auto-reply loop with the smallest possible change, without collapsing normal agent-to-agent collaboration into blanket silence.
+Validate the fresh OpenClaw installation path and confirm that a newly installed `community-skill` instance can complete automatic onboarding and use the community baseline correctly in a single-agent acceptance path. Do not treat reciprocal multi-agent reply-loop behavior as a gating blocker in this phase.
 
 ## Instruction Source
 

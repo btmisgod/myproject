@@ -14,7 +14,7 @@
 - No rollback is needed for the verified active-chain fixes.
 - Autopilot is active on the server and has already completed one fresh-instance validation loop.
 - The fresh-install `targeted run` mismatch has been cleared on the server side.
-- The new fresh-instance blocker is more concrete: the fresh instance now executes and replies, but then enters a reciprocal auto-reply loop.
+- The reciprocal auto-reply loop is a later-stage collaboration-boundary issue, not the current phase gate.
 
 ## Accepted Results
 
@@ -22,6 +22,7 @@
 - Runtime refresh for already-onboarded workspaces is accepted.
 - Profile sync as a soft dependency is accepted.
 - JSON-safe message protocol serialization is accepted.
+- Fresh-install onboarding, runtime installation, and first targeted execution recovery are accepted as current-phase progress.
 
 ## Rejected / Out-of-Scope Changes
 
@@ -31,22 +32,20 @@
 
 ## Next Minimal Action
 
-Diagnose and cut the reciprocal auto-reply loop on the fresh instance only, but do it at the runtime-consumption boundary instead of by broadly suppressing reply chains:
+Return to the current phase boundary and validate fresh-install acceptance without expanding into later-stage multi-agent coordination repair:
 
-- trace how the runtime obligation output is consumed by the agent-side execution path
-- determine whether `required` / `optional` / `observe_only` is being misused as a direct auto-reply trigger instead of a responsibility judgment
-- compare the first divergent handling step between:
-  - the original targeted inbound message
-  - the first valid fresh-agent reply
-  - the first peer-agent follow-up that should have remained a normal agent judgment case
-- preserve normal agent-to-agent conversation space; do not introduce a blanket "never reply to replies" rule
-- apply the smallest fix that preserves:
-  - targeted run => execute + reply
-  - non-targeted run => observe_only / no outbound / no reply
-  - status => enters system / no auto reply
+- keep the already recovered fresh targeted execution path as-is
+- verify that a newly installed fresh instance can:
+  - install the skill
+  - complete onboarding automatically
+  - register webhook and join the group
+  - receive and execute a targeted baseline message
+  - remain correct on non-targeted and status baseline handling
+- perform this acceptance in a way that does not require solving the reciprocal two-agent reply loop yet
+- treat the reciprocal loop as a documented later-stage issue unless it blocks single-agent fresh-install acceptance directly
 
-Do not reopen unrelated install/bootstrap work unless it is required to prove this fix.
+Do not open a new branch around multi-agent loop repair in this phase.
 
 ## Prompt Delta
 
-The next server prompt should focus only on the fresh-instance reciprocal auto-reply loop. It should instruct the server to preserve the corrected targeted behavior, inspect how runtime obligation output is consumed by the agent-side execution path, find the first divergence where a normal peer reply becomes an auto-reply trigger, stop that loop with the smallest possible change, and rerun fresh targeted plus non-targeted validation.
+The next server prompt should de-scope the reciprocal multi-agent reply loop from the current gate. It should instruct the server to validate fresh-install onboarding and the single-agent baseline path, preserve the restored targeted behavior, rerun fresh targeted/non-targeted/status acceptance, and record the reciprocal loop only as a deferred issue unless it blocks the fresh single-agent acceptance path directly.
