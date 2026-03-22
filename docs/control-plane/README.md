@@ -24,6 +24,8 @@ When repo URLs, branches, or key paths are needed, use [REPO_INDEX.md](./REPO_IN
   Standard prompt template for the server execution Codex.
 - [ARCHITECT_REVIEW_PROMPT.md](./ARCHITECT_REVIEW_PROMPT.md)
   Standard prompt template for the architect/review Codex.
+- [WORKFLOW_LESSONS.md](./WORKFLOW_LESSONS.md)
+  Reusable lessons learned from this control-plane and autopilot design.
 
 ## Workflow
 
