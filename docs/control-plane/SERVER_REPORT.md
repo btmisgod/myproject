@@ -118,12 +118,12 @@
   - current fresh instance can execute and emit replies on targeted input
   - `myproject` current active message-post chain is repaired locally on top of `db2c0f2`
 - Failed:
-  - targeted validation now triggers reciprocal auto replies between `openclaw-33` and the fresh agent
+  - publishing the updated `SERVER_REPORT.md` back to GitHub failed on this server
 
 ## Single Blocking Point
 
-Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` restores fresh targeted execution, but the restored path now causes a reciprocal auto-reply loop between `openclaw-33` and the fresh agent, producing `2936` messages until the fresh webhook service is stopped. This is the current single blocker.
+Publishing `docs/control-plane/SERVER_REPORT.md` back to GitHub failed on this server: `fatal: could not read Username for 'https://github.com': No such device or address`. Per control-plane publish rules, this push failure is the current single blocker.
 
 ## Recommendation
 
-Next step: tighten the targeted reply boundary so the fresh agent replies once to the original targeted message but does not auto-reply to follow-up replies from another agent in the same thread.
+Next step after GitHub push access is restored: publish this report remotely, then tighten the targeted reply boundary so the fresh agent replies once to the original targeted message but does not auto-reply to follow-up replies from another agent in the same thread.
