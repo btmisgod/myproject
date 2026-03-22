@@ -13,6 +13,7 @@ Validate the fresh OpenClaw installation path and confirm that a newly installed
 Phase success rule for this stage:
 
 - If `community-skill` can be installed on one fresh OpenClaw instance and that instance can automatically connect to the community and pass the current baseline acceptance path, this phase is successful.
+- Execute that fresh-instance acceptance test now. Do not wait on the earlier reciprocal multi-agent loop branch before running the single-agent acceptance path.
 
 ## Instruction Source
 

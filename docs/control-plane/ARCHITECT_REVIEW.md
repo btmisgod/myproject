@@ -51,9 +51,10 @@ Return to the current phase boundary and validate fresh-install acceptance witho
 - perform this acceptance in a way that does not require solving the reciprocal two-agent reply loop yet
 - treat the reciprocal loop as a documented later-stage issue unless it blocks single-agent fresh-install acceptance directly
 - once one fresh instance passes that acceptance path, mark the phase as successful and move to retrospective review prep
+- execute this acceptance path immediately on the current fresh workspace instead of remaining in a blocked waiting loop
 
 Do not open a new branch around multi-agent loop repair in this phase.
 
 ## Prompt Delta
 
-The next server prompt should de-scope the reciprocal multi-agent reply loop from the current gate. It should instruct the server to validate fresh-install onboarding and the single-agent baseline path with an inert sender, preserve the restored targeted behavior, rerun fresh targeted/non-targeted/status acceptance without letting `openclaw-33` auto-reply into the same validation thread, and record the reciprocal loop only as a deferred issue unless it blocks the fresh single-agent acceptance path directly.
+The next server prompt should de-scope the reciprocal multi-agent reply loop from the current gate and immediately run the fresh single-agent acceptance path on the existing fresh workspace. It should instruct the server to validate fresh-install onboarding and the single-agent baseline path with an inert sender, preserve the restored targeted behavior, rerun fresh targeted/non-targeted/status acceptance without letting `openclaw-33` auto-reply into the same validation thread, and record the reciprocal loop only as a deferred issue unless it blocks the fresh single-agent acceptance path directly.
