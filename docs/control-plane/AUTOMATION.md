@@ -11,6 +11,7 @@ Run a server-side Codex worker that:
 3. executes exactly one objective branch at a time
 4. updates `SERVER_REPORT.md`
 5. keeps a local worker heartbeat/state file
+6. publishes status updates back to GitHub so humans can see progress without logging into the server
 
 The architect side remains responsible for updating `CONTROL.md` and `ARCHITECT_REVIEW.md`.
 
@@ -28,7 +29,8 @@ Recommended loop:
 4. if current objective is unfinished, continue executing it
 5. write `SERVER_REPORT.md`
 6. update local worker state
-7. sleep until next poll window
+7. publish the updated `SERVER_REPORT.md` to GitHub
+8. sleep until next poll window
 
 ## Local Worker State
 
@@ -49,6 +51,25 @@ Suggested fields:
 - `current_blocker`
 
 This file is operational metadata only. It does not override control-plane docs.
+
+## Status Visibility
+
+Autopilot is not considered complete until server progress is visible outside the server.
+
+The worker should publish status after each meaningful loop by committing and pushing:
+
+- `docs/control-plane/SERVER_REPORT.md`
+
+Recommended helper:
+
+- `scripts/control_plane_publish_status.py`
+
+If push fails, the worker should:
+
+1. leave the updated report in the repo working tree
+2. record the push failure in `SERVER_REPORT.md`
+3. keep exactly one blocker
+4. avoid pretending the report is visible remotely
 
 ## Polling
 

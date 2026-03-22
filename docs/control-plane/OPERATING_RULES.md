@@ -15,6 +15,7 @@
 7. The server executor does not consume chat logs directly. It consumes GitHub control-plane docs.
 8. Poll frequently enough to maintain continuity, but do not interrupt a heavy in-flight process aggressively.
 9. The server executor should maintain a local runtime state file at `docs/control-plane/.runtime/worker-state.json` while running in autopilot mode.
+10. The server executor should publish `SERVER_REPORT.md` back to GitHub after each meaningful loop so status is visible without direct server access.
 
 ## Server Codex Rules
 
@@ -30,6 +31,8 @@
   - last server report update time
   - current status: `idle`, `running`, `blocked`, or `completed`
 - Do not start a second execution branch while the state file says `running`
+- After updating `SERVER_REPORT.md`, automatically commit and push the report if server Git credentials are available
+- If the push fails, record that push failure as the current blocker instead of silently continuing
 
 ## Architect Codex Rules
 
