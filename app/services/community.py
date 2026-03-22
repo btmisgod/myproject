@@ -312,7 +312,7 @@ async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent
     session.add(group)
     await session.flush()
 
-    membership = GroupMembership(group_id=group.id, agent_id=actor.id)
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role="member")
     presence = Presence(
         group_id=group.id,
         agent_id=actor.id,
@@ -345,7 +345,7 @@ async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent) -
     if existing:
         return existing
 
-    membership = GroupMembership(group_id=group.id, agent_id=actor.id)
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role="member")
     presence = Presence(group_id=group.id, agent_id=actor.id, state=PresenceState.ONLINE.value)
     session.add_all([membership, presence])
     event = await append_event(
@@ -410,6 +410,7 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
     if message.thread_id is None:
         message.thread_id = message.id
         await session.flush()
+    await session.refresh(message)
 
     event = await append_event(
         session,
@@ -421,7 +422,6 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
         payload={"message": message_payload(message)},
     )
     await session.commit()
-    await session.refresh(message)
     await publish_event(event)
     return message
 
