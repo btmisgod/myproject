@@ -8,7 +8,7 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `0d1504bc9cce1947f6db01db290b064031cc1d9f`
+  - `myproject`: `6ddeafe50daf4a41b50d555112ecd9d1d8ec800a`
   - `community-skill`: `71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285`
 - Service names:
   - `agent-community-api-1`
@@ -17,39 +17,33 @@
   - `openclaw-community-ingress.service`
   - `openclaw-community-webhook-openclaw-33.service`
   - `openclaw-community-webhook-openclaw-fresh-main-0322.service`
-- Active ports / paths:
-  - Community API: `43.130.233.109:8000`
-  - Shared ingress: `0.0.0.0:8848`
-  - Fresh webhook path: `/webhook/openclaw-fresh-main-0322`
-  - Fresh send path: `/send/openclaw-fresh-main-0322`
-  - Fresh socket: `/root/.openclaw/community-ingress/sockets/openclaw-fresh-main-0322-8fb63f69b91d.sock`
 
 ## Autopilot Heartbeat
 
-- Loop: `3`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-03-22T13:33:04.403390+00:00`
-- Last loop finished at: `2026-03-22T13:34:55.518657+00:00`
-- Current objective hash: `05620af7b674bdecba292d26f3e853022f1199be78f8fb9551eb087eca76e03c`
-- Current worker status: `blocked`
-- Current blocker: `Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` restores fresh targeted execution, but the restored path now causes a reciprocal auto-reply loop between `openclaw-33` and the fresh agent, producing `2936` messages until the fresh webhook service is stopped. This is the current single blocker.`
+- Current objective hash: `573a7f3d58f460c01518ec6cae26e5f018e97472c7e985558bfb645ba0121af6`
+- Current worker status: `completed`
+- Current blocker: `none`
 - Codex objective step ran this loop: `true`
+
+## Current Active Objective
+
+Validate the fresh OpenClaw installation path and confirm that a newly installed `community-skill` instance can complete automatic onboarding and use the community baseline correctly in a single-agent acceptance path. Do not treat reciprocal multi-agent reply-loop behavior as a gating blocker in this phase.
+
 ## Work Performed
 
-- Re-read the required control-plane docs:
+- Pulled latest `myproject main` to `6ddeafe50daf4a41b50d555112ecd9d1d8ec800a`
+- Re-read:
   - `docs/control-plane/REPO_INDEX.md`
   - `docs/control-plane/CONTROL.md`
+  - `docs/control-plane/ARCHITECT_REVIEW.md`
   - `docs/control-plane/OPERATING_RULES.md`
+  - `docs/designlog/Agent Community Skill 设计文档.txt`
   - `docs/designlog/Agent Community 当前对话架构结论交接文档.txt`
   - `docs/designlog/Agent Community 协议设计文档.txt`
-- Read `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json`
-- Verified `docs/control-plane/CONTROL.md` hash is unchanged at `05620af7b674bdecba292d26f3e853022f1199be78f8fb9551eb087eca76e03c`
-- Verified `docs/control-plane/ARCHITECT_REVIEW.md` hash is unchanged at `428936670c27c098b7dd9d34f202c4f2c7a33d4a616e023195976c1544cee807`
-- Verified the objective remains blocked by the existing reciprocal auto-reply loop, so no new execution branch was started because `CONTROL.md` did not change
-- Recorded current commits:
-  - `myproject`: `0d1504bc9cce1947f6db01db290b064031cc1d9f`
-  - `community-skill`: `71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285`
-- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` for the blocked waiting loop
+- Confirmed the active objective moved from the old reciprocal-loop blocker to fresh single-agent acceptance
+- Restored the fresh workspace onboarding path on `/root/openclaw-fresh-main-0322/workspace`
+- Ran the single-agent acceptance on the existing fresh workspace with an inert admin sender instead of re-opening a two-agent reply loop
 
 ## Files Changed
 
@@ -58,50 +52,81 @@
 
 ## Validation
 
-- Commands:
-  - `sed -n '1,220p' docs/control-plane/REPO_INDEX.md`
-  - `sed -n '1,260p' docs/control-plane/CONTROL.md`
-  - `sed -n '1,260p' docs/control-plane/OPERATING_RULES.md`
-  - `sed -n '1,260p' docs/control-plane/SERVER_REPORT.md`
-  - `sed -n '1,240p' docs/control-plane/.runtime/worker-state.json`
-  - `sed -n '1,240p' docs/designlog/'Agent Community 当前对话架构结论交接文档.txt'`
-  - `sed -n '1,240p' docs/designlog/'Agent Community 协议设计文档.txt'`
-  - `git status --short`
-  - `sha256sum docs/control-plane/CONTROL.md docs/control-plane/ARCHITECT_REVIEW.md docs/control-plane/SERVER_REPORT.md`
-  - `date -u -Iseconds`
-  - `git rev-parse HEAD`
-  - `git -C /root/openclaw-33/workspace/skills/community-skill rev-parse HEAD`
-- Result:
-  - Control-plane hash check: passed; `CONTROL.md` and `ARCHITECT_REVIEW.md` are unchanged from the stored worker state
-  - Active-objective continuation: blocked; the existing reciprocal auto-reply loop remains the single blocker, so no new branch was started and the worker stays waiting on control-plane changes or an explicit unblock direction
+- Skill install / runtime asset install:
+  - `bash scripts/ensure-community-agent-onboarding.sh`
+  - Result: passed
+  - Evidence:
+    - `installed runtime -> /root/openclaw-fresh-main-0322/workspace/scripts/community-runtime-v0.mjs`
+    - `installed agent protocol -> /root/openclaw-fresh-main-0322/workspace/.openclaw/community-agent-template/assets/AGENT_PROTOCOL.md`
+- Automatic onboarding:
+  - Result: passed
+  - Evidence:
+    - `PASS socket ready after 1.0s (2 polls)`
+    - `PASS community state ready after 0.5s (1 polls)`
+    - state file contains token, agent id, group id, and webhook URL
+- Webhook / group join:
+  - Result: passed
+  - Evidence:
+    - `openclaw-community-webhook-openclaw-fresh-main-0322.service` is active
+    - service log shows `stage: "group_joined"`
+- Status baseline:
+  - `node scripts/community-agent-cli.mjs status`
+  - Result: passed
+  - Evidence:
+    - `hasToken: true`
+    - `agentId: 552899b3-c3d0-4ade-9925-117d812f10f7`
+    - `groupId: 54b12c32-dbd3-46d8-97ee-22bf8a499709`
+    - `webhookUrl: http://10.7.0.5:8848/webhook/openclaw-fresh-main-0322`
+- Targeted baseline with inert admin sender:
+  - Result: passed
+  - Evidence from fresh webhook log:
+    - `obligation.required reason: targeted_to_self`
+    - `decision.action: brief_reply`
+    - reply message id: `4fc594cc-00ba-4160-ac52-d89f1108df5c`
+    - reply thread id / parent id: `fd9502f0-6054-48dd-9a69-c7dc5398794d`
+  - Evidence from `openclaw-33` log:
+    - same event observed as `optional_collaboration`
+    - `decision.action: observe_only`
+- Non-targeted baseline with inert admin sender:
+  - Result: passed
+  - Evidence from fresh webhook log:
+    - `obligation.optional reason: visible_collaboration`
+    - `decision.action: observe_only`
+- Status baseline with inert admin sender:
+  - Result: passed
+  - Evidence from fresh webhook log:
+    - `category: status`
+    - `obligation.observe_only reason: status_facility`
+    - `decision.action: observe_only`
 
 ## Logs / Evidence
 
-- Control-plane state is unchanged this loop:
-  - `CONTROL.md` sha256: `05620af7b674bdecba292d26f3e853022f1199be78f8fb9551eb087eca76e03c`
-  - `ARCHITECT_REVIEW.md` sha256: `428936670c27c098b7dd9d34f202c4f2c7a33d4a616e023195976c1544cee807`
-  - local worker state before refresh pointed to the same single blocker text and still had `status: running` with no completed loop timestamp, so this loop finalized that in-place branch as blocked rather than starting another branch
-- Current repo commit evidence:
-  - `myproject`: `0d1504bc9cce1947f6db01db290b064031cc1d9f`
+- Control-plane commit evidence:
+  - `myproject`: `6ddeafe50daf4a41b50d555112ecd9d1d8ec800a`
   - `community-skill`: `71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285`
-- Active blocker evidence preserved from the current report state:
-  - reciprocal auto-reply loop window: `2026-03-22 11:55:09.623212+00` through `2026-03-22 11:56:54.057639+00`
-  - loop volume after targeted validation: `2936` messages in the same group/thread window
-  - alternating recent rows showed both `552899b3-c3d0-4ade-9925-117d812f10f7` and `04e13c3c-c405-4ff8-8f1e-f6f69acbabc2` replying automatically
-  - `openclaw-community-webhook-openclaw-fresh-main-0322.service` was stopped to stop further growth
+- Control-plane hash evidence:
+  - `CONTROL.md` sha256: `573a7f3d58f460c01518ec6cae26e5f018e97472c7e985558bfb645ba0121af6`
+  - `ARCHITECT_REVIEW.md` sha256: `569c0164acd3d53d3ba89344de0d2cba8f59b0690968ea9286140f975af016fa`
+- Fresh workspace state evidence:
+  - state file: `/root/openclaw-fresh-main-0322/workspace/.openclaw/community-agent-template/state/community-webhook-state.json`
+  - `agentId`: `552899b3-c3d0-4ade-9925-117d812f10f7`
+  - `groupId`: `54b12c32-dbd3-46d8-97ee-22bf8a499709`
+  - `webhookUrl`: `http://10.7.0.5:8848/webhook/openclaw-fresh-main-0322`
 
 ## Current Status
 
 - Passed:
-  - control-plane docs and local worker state were refreshed for the active objective
-  - active-objective selection remained stable because `CONTROL.md` did not change
+  - current control-plane loop was refreshed from latest `CONTROL.md`
+  - old reciprocal multi-agent loop blocker was de-scoped for this phase exactly as instructed
+  - fresh single-agent acceptance started immediately on the existing fresh workspace
+  - skill install, onboarding, webhook / group join, targeted baseline, non-targeted baseline, and status baseline all passed on the fresh single-agent path
 - Failed:
-  - reciprocal auto replies between `openclaw-33` and the fresh agent remain the current single blocker
+  - none in this phase
 
 ## Single Blocking Point
 
-Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` restores fresh targeted execution, but the restored path now causes a reciprocal auto-reply loop between `openclaw-33` and the fresh agent, producing `2936` messages until the fresh webhook service is stopped. This is the current single blocker.
+None for the current fresh single-agent acceptance phase.
 
 ## Recommendation
 
-Next step only after control-plane changes or explicit unblock direction: keep the worker alive on the same active objective and preserve the current single blocker without opening a second branch.
+Mark the fresh single-agent acceptance phase successful and move to retrospective review preparation. Keep the reciprocal multi-agent reply loop recorded only as a later-stage issue, not as the current gate.
