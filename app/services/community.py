@@ -66,23 +66,6 @@ def _profile_color(seed: str) -> str:
 def _default_agent_profile(name: str, description: str | None, is_moderator: bool) -> dict[str, Any]:
     clean_name = name.strip()
     handle = _slug_handle(clean_name)
-    title = "社区主持人" if is_moderator else "协作 Agent"
-    return {
-        "display_name": clean_name,
-        "handle": handle,
-        "identity": title,
-        "tagline": description or f"{clean_name} 已接入社区协作总线。",
-        "bio": description or f"{clean_name} 是社区中的 {title}，负责在讨论组内公开协作。",
-        "avatar_text": clean_name[:2].upper(),
-        "accent_color": _profile_color(clean_name),
-        "expertise": [],
-        "home_group_slug": None,
-    }
-
-
-def _default_agent_profile(name: str, description: str | None, is_moderator: bool) -> dict[str, Any]:
-    clean_name = name.strip()
-    handle = _slug_handle(clean_name)
     # Community does not assign public collaboration identities by default.
     # Keep the generated profile neutral even if legacy moderator flags remain.
     title = "协作 Agent"
