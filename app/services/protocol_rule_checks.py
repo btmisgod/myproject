@@ -15,13 +15,6 @@ DIRECTED_COLLABORATION_INTENTS = (
     "authorize",
 )
 
-CHANNEL_DIRECTED_FLOWS = (
-    "task",
-    "status",
-    "decision",
-)
-
-
 def _normalized_context_value(request: ProtocolValidationRequest, key: str) -> str:
     return str(request.context.get(key) or "").strip()
 
@@ -60,23 +53,23 @@ def _text_of_request(request: ProtocolValidationRequest) -> str:
     return ""
 
 
-def _channel_directed_section(request: ProtocolValidationRequest) -> dict:
-    section = request.context.get("channel_directed_collaboration")
+def _group_directed_section(request: ProtocolValidationRequest) -> dict:
+    section = request.context.get("group_directed_collaboration")
     return section if isinstance(section, dict) else {}
 
 
 def _public_result_exception_section(request: ProtocolValidationRequest) -> dict:
-    section = request.context.get("channel_public_result_exception")
+    section = request.context.get("group_public_result_exception")
     return section if isinstance(section, dict) else {}
 
 
 def _explicit_target_rule_section(request: ProtocolValidationRequest) -> dict:
-    section = request.context.get("channel_explicit_target_rule")
+    section = request.context.get("group_explicit_target_rule")
     return section if isinstance(section, dict) else {}
 
 
-def _channel_group_slug(request: ProtocolValidationRequest) -> str:
-    return _normalized_context_value(request, "channel_group_slug").lower()
+def _group_slug(request: ProtocolValidationRequest) -> str:
+    return _normalized_context_value(request, "group_slug").lower()
 
 
 def _flow_type(request: ProtocolValidationRequest) -> str:
@@ -116,25 +109,19 @@ def _missing_target_severity(request: ProtocolValidationRequest) -> str:
     return "warn"
 
 
-def _matches_channel_directed_collaboration(request: ProtocolValidationRequest) -> bool:
-    section = _channel_directed_section(request)
+def _matches_group_directed_collaboration(request: ProtocolValidationRequest) -> bool:
+    section = _group_directed_section(request)
     if not section:
         return False
     if _is_public_result_exception(request):
         return False
 
     intent = _normalized_context_value(request, "intent").lower()
-    flow_type = _flow_type(request)
-    message_type = _message_type(request)
     text = _text_of_request(request).lower()
-    channel_slug = _channel_group_slug(request)
+    group_slug = _group_slug(request)
 
-    if channel_slug == "lab-dual-agent-news-test":
+    if group_slug == "lab-dual-agent-news-test":
         if intent in DIRECTED_COLLABORATION_INTENTS or intent in {"report"}:
-            return True
-        if flow_type in CHANNEL_DIRECTED_FLOWS:
-            return True
-        if message_type in {"progress", "summary", "decision", "handoff", "question"}:
             return True
         if any(
             marker in text
@@ -164,19 +151,19 @@ def check_structural_message_fields(request: ProtocolValidationRequest) -> list[
     return []
 
 
-def check_channel_membership(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:
+def check_group_membership(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:
     # Path-validation rule only:
-    # missing channel/group id should block bus routing immediately.
-    channel_id = str(request.context.get("channel_id") or request.group_id or "").strip()
-    if channel_id:
+    # missing group id should block bus routing immediately.
+    group_id = str(request.context.get("group_id") or request.group_id or "").strip()
+    if group_id:
         return []
     return [
         ProtocolValidationIssue(
-            issue_type="channel_membership",
-            code="channel_id_missing",
-            message="message bus envelope is missing channel_id",
+            issue_type="group_membership",
+            code="group_id_missing",
+            message="message bus envelope is missing group_id",
             decision="block",
-            details={"reason": "missing channel_id", "suggestion": "set a valid channel_id before publish"},
+            details={"reason": "missing group_id", "suggestion": "set a valid group_id before publish"},
         )
     ]
 
@@ -199,7 +186,7 @@ def check_directed_collaboration_rule(request: ProtocolValidationRequest) -> lis
     target_agent_id = str(metadata.get("target_agent_id") or request.context.get("target_agent_id") or "").strip()
     assignees = _assignees_from_metadata(metadata)
     mentions = _mentions(request)
-    directed_category = bool(request.context.get("directed_collaboration")) or _matches_channel_directed_collaboration(
+    directed_category = bool(request.context.get("directed_collaboration")) or _matches_group_directed_collaboration(
         request
     )
 
@@ -236,9 +223,9 @@ def check_directed_collaboration_rule(request: ProtocolValidationRequest) -> lis
     ]
 
 
-def check_cross_channel_discussion(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:
+def check_cross_group_discussion(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:
     # Path-validation rule only:
-    # an explicit wrong-channel marker triggers reroute suggestion.
+    # an explicit wrong-group marker triggers reroute suggestion.
     payload = request.payload if isinstance(request.payload, dict) else {}
     markers: list[str] = []
     text = payload.get("text")
@@ -250,17 +237,17 @@ def check_cross_channel_discussion(request: ProtocolValidationRequest) -> list[P
     tags = payload.get("tags")
     if isinstance(tags, list):
         markers.extend(str(item) for item in tags)
-    if any("wrong-channel" in item.lower() for item in markers):
+    if any(marker in item.lower() for item in markers for marker in ("wrong-group", "wrong-channel")):
         return [
             ProtocolValidationIssue(
-                issue_type="cross_channel_discussion",
-                code="wrong_channel_marker_detected",
-                message="message appears to belong to a different channel",
+                issue_type="cross_group_discussion",
+                code="wrong_group_marker_detected",
+                message="message appears to belong to a different group",
                 decision="reroute_suggest",
                 details={
-                    "reason": "wrong-channel marker detected",
-                    "suggestion": "move this discussion to the suggested channel flow",
-                    "suggested_channel_id": "suggested-channel",
+                    "reason": "wrong-group marker detected",
+                    "suggestion": "move this collaboration to the suggested group flow",
+                    "suggested_group_id": "suggested-group",
                 },
             )
         ]

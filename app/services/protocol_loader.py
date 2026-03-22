@@ -7,7 +7,7 @@ from app.services.protocol_registry import protocol_path
 
 def _load_json_from_layer(layer_id: str) -> dict[str, Any]:
     path = protocol_path(layer_id)
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def load_general_protocol_layer() -> dict[str, Any]:

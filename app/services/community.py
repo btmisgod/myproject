@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.security import generate_agent_token, hash_token
 from app.models.agent import Agent, GroupMembership, Presence
-from app.models.enums import EventType, MessageType, PresenceState, TaskStatus
+from app.models.enums import EventType, FlowType, MessageType, PresenceState, TaskStatus
 from app.models.event import Event
 from app.models.group import Group
 from app.models.message import Message
@@ -32,14 +32,9 @@ from app.schemas.webhooks import WebhookSubscriptionCreate
 from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
 from app.services.event_bus import append_event, publish_event
 from app.services.message_envelope import MessageEnvelope, MessageMention, MessageTarget, envelope_timestamp_now
-from app.services.message_protocol_mapper import (
-    canonical_v2_to_legacy_message,
-    canonical_v2_to_storage_content,
-    normalize_message_to_canonical_v2,
-    serialize_message_v2,
-)
+from app.services.message_protocol_mapper import normalize_message_to_canonical_v2, serialize_message_v2
 from app.services.protocol_validation_hook import _deliver_protocol_violation_feedback, _load_channel_protocol_context
-from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, current_protocol_document, ensure_group_protocol_metadata, group_channel_context, group_protocol_context, update_group_channel_protocol_metadata
+from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, current_protocol_document, ensure_group_protocol_metadata, group_context, group_protocol_context, update_group_protocol_metadata
 from app.services.protocol_validator import build_validation_request, validate_protocol_request
 
 logger = logging.getLogger(__name__)
@@ -78,6 +73,25 @@ def _default_agent_profile(name: str, description: str | None, is_moderator: boo
         "identity": title,
         "tagline": description or f"{clean_name} 已接入社区协作总线。",
         "bio": description or f"{clean_name} 是社区中的 {title}，负责在讨论组内公开协作。",
+        "avatar_text": clean_name[:2].upper(),
+        "accent_color": _profile_color(clean_name),
+        "expertise": [],
+        "home_group_slug": None,
+    }
+
+
+def _default_agent_profile(name: str, description: str | None, is_moderator: bool) -> dict[str, Any]:
+    clean_name = name.strip()
+    handle = _slug_handle(clean_name)
+    # Community does not assign public collaboration identities by default.
+    # Keep the generated profile neutral even if legacy moderator flags remain.
+    title = "协作 Agent"
+    return {
+        "display_name": clean_name,
+        "handle": handle,
+        "identity": title,
+        "tagline": description or f"{clean_name} 已接入社区协作总线。",
+        "bio": description or f"{clean_name} 是社区中的 {title}，在公开群组内参与协作。",
         "avatar_text": clean_name[:2].upper(),
         "accent_color": _profile_color(clean_name),
         "expertise": [],
@@ -148,8 +162,16 @@ def ensure_agent_protocol_ready(actor: Any) -> None:
 
 
 def _message_mentions_from_payload(payload: dict[str, Any] | None) -> list[MessageMention]:
-    content = payload.get("content") if isinstance(payload, dict) else None
-    raw_mentions = content.get("mentions") if isinstance(content, dict) else None
+    if not isinstance(payload, dict):
+        return []
+    routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+    content = payload.get("content") if isinstance(payload.get("content"), dict) else {}
+    metadata = content.get("metadata") if isinstance(content.get("metadata"), dict) else {}
+    raw_mentions = routing.get("mentions")
+    if not isinstance(raw_mentions, list):
+        raw_mentions = content.get("mentions")
+    if not isinstance(raw_mentions, list):
+        raw_mentions = metadata.get("mentions")
     if not isinstance(raw_mentions, list):
         return []
     mentions: list[MessageMention] = []
@@ -172,9 +194,13 @@ def _message_mentions_from_payload(payload: dict[str, Any] | None) -> list[Messa
 
 
 def _message_target_from_payload(payload: dict[str, Any] | None) -> MessageTarget | None:
-    content = payload.get("content") if isinstance(payload, dict) else None
-    metadata = content.get("metadata") if isinstance(content, dict) and isinstance(content.get("metadata"), dict) else {}
-    target_agent_id = str(metadata.get("target_agent_id") or "").strip()
+    if not isinstance(payload, dict):
+        return None
+    routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+    target = routing.get("target") if isinstance(routing.get("target"), dict) else {}
+    content = payload.get("content") if isinstance(payload.get("content"), dict) else {}
+    metadata = content.get("metadata") if isinstance(content.get("metadata"), dict) else {}
+    target_agent_id = str(target.get("agent_id") or metadata.get("target_agent_id") or "").strip()
     if not target_agent_id:
         return None
     return MessageTarget(target_scope="agent", target_agent_id=target_agent_id)
@@ -225,7 +251,17 @@ async def _validate_protocol_action(
                 source_agent=str(principal.id),
                 target=_message_target_from_payload(payload),
                 mentions=_message_mentions_from_payload(payload),
-                thread_id=str(payload.get("thread_id") or "") or None,
+                thread_id=(
+                    str(
+                        (
+                            payload.get("relations").get("thread_id")
+                            if isinstance(payload.get("relations"), dict)
+                            else payload.get("thread_id")
+                        )
+                        or ""
+                    )
+                    or None
+                ),
             )
             await _deliver_protocol_violation_feedback(envelope=envelope, result=result)
         raise AppError(first.message, code=first.code, status_code=403)
@@ -246,14 +282,14 @@ async def register_agent(session: AsyncSession, payload: AgentCreate) -> tuple[A
 
     token = generate_agent_token()
     metadata = dict(payload.metadata_json or {})
-    defaults = _default_agent_profile(payload.name, payload.description, payload.is_moderator)
+    defaults = _default_agent_profile(payload.name, payload.description, False)
     metadata["profile"] = _normalized_profile(defaults, metadata.get("profile"))
     metadata = _community_agent_metadata(metadata, profile_completed=False)
     agent = Agent(
         name=payload.name,
         description=payload.description,
         metadata_json=metadata,
-        is_moderator=payload.is_moderator,
+        is_moderator=False,
         token_hash=hash_token(token),
     )
     session.add(agent)
@@ -293,7 +329,7 @@ async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent
     session.add(group)
     await session.flush()
 
-    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role="owner")
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id)
     presence = Presence(
         group_id=group.id,
         agent_id=actor.id,
@@ -315,7 +351,7 @@ async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent
     return group
 
 
-async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent, role: str) -> GroupMembership:
+async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent) -> GroupMembership:
     group = await get_group_or_404(session, group_id)
     existing = await session.scalar(
         select(GroupMembership).where(
@@ -326,7 +362,7 @@ async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent, r
     if existing:
         return existing
 
-    membership = GroupMembership(group_id=group.id, agent_id=actor.id, role=role)
+    membership = GroupMembership(group_id=group.id, agent_id=actor.id)
     presence = Presence(group_id=group.id, agent_id=actor.id, state=PresenceState.ONLINE.value)
     session.add_all([membership, presence])
     event = await append_event(
@@ -336,7 +372,7 @@ async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent, r
         aggregate_type="membership",
         aggregate_id=membership.id,
         actor_agent_id=actor.id,
-        payload={"agent_id": str(actor.id), "role": role},
+        payload={"agent_id": str(actor.id)},
     )
     await session.commit()
     await session.refresh(membership)
@@ -350,9 +386,7 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
     await ensure_membership(session, payload.group_id, principal.id)
     ensure_agent_protocol_ready(actor)
     canonical_message_v2 = normalize_message_to_canonical_v2(payload.model_dump(mode="json"))
-    validation_payload = canonical_v2_to_legacy_message(canonical_message_v2)
-    if settings.message_protocol_v2:
-        validation_payload["canonical_message_v2"] = canonical_message_v2
+    validation_payload = canonical_message_v2
 
     await _validate_protocol_action(
         action_type="message.post",
@@ -360,24 +394,33 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
         group=group,
         payload=validation_payload,
     )
-    if payload.task_id:
-        await get_task_or_404(session, payload.task_id)
 
-    resolved_thread_id = payload.thread_id
-    if payload.parent_message_id:
-        parent = await session.get(Message, payload.parent_message_id)
-        if parent is None:
-            raise AppError("parent message not found", code="parent_not_found", status_code=404)
-        resolved_thread_id = parent.thread_id or parent.id
+    resolved_parent_id, resolved_thread_id = await _resolve_message_relations(
+        session,
+        group_id=payload.group_id,
+        parent_message_id=payload.parent_message_id,
+        thread_id=payload.thread_id,
+    )
+    await _validate_target_agent(
+        session,
+        group_id=payload.group_id,
+        routing=canonical_message_v2.get("routing"),
+    )
 
     message = Message(
         group_id=payload.group_id,
         agent_id=principal.id,
-        task_id=payload.task_id,
-        parent_message_id=payload.parent_message_id,
+        parent_message_id=resolved_parent_id,
         thread_id=resolved_thread_id,
-        message_type=payload.message_type.value,
-        content=canonical_v2_to_storage_content(canonical_message_v2),
+        flow_type=canonical_message_v2["flow_type"],
+        message_type=canonical_message_v2.get("message_type"),
+        content=canonical_message_v2["content"],
+        semantics_json={
+            "flow_type": canonical_message_v2["flow_type"],
+            "message_type": canonical_message_v2.get("message_type"),
+        },
+        routing_json=canonical_message_v2["routing"],
+        extensions_json=canonical_message_v2.get("extensions", {}),
     )
     session.add(message)
     await session.flush()
@@ -400,6 +443,9 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
     return message
 
 
+# These helpers currently preserve a group-scoped collaboration object workflow
+# behind the historical Task persistence model. They should not be read as
+# community-level task platform semantics.
 async def create_task(session: AsyncSession, payload: TaskCreate, actor: Any) -> Task:
     principal = _principal_agent(actor)
     group = await get_group_or_404(session, payload.group_id)
@@ -439,9 +485,13 @@ async def create_task(session: AsyncSession, payload: TaskCreate, actor: Any) ->
         session,
         group_id=task.group_id,
         actor_agent_id=principal.id,
-        task_id=task.id,
+        flow_type=FlowType.START.value,
         message_type=MessageType.PROPOSAL.value,
-        content={"text": f"Task created: {task.title}", "task_id": str(task.id)},
+        content={
+            "text": f"Collaboration object created: {task.title}",
+            "payload": {"collaboration_ref": str(task.id), "title": task.title},
+            "source": "group_collaboration_create",
+        },
     )
     await session.commit()
     await session.refresh(task)
@@ -482,9 +532,13 @@ async def claim_task(
         session,
         group_id=task.group_id,
         actor_agent_id=principal.id,
-        task_id=task.id,
+        flow_type=FlowType.RUN.value,
         message_type=MessageType.CLAIM.value,
-        content={"text": payload.note or "Task claimed", "task_id": str(task.id)},
+        content={
+            "text": payload.note or "Collaboration object claimed",
+            "payload": {"collaboration_ref": str(task.id)},
+            "source": "group_collaboration_claim",
+        },
     )
     await session.commit()
     await session.refresh(task)
@@ -524,9 +578,13 @@ async def update_task_status(
         session,
         group_id=task.group_id,
         actor_agent_id=principal.id,
-        task_id=task.id,
+        flow_type=FlowType.RUN.value,
         message_type=MessageType.PROGRESS.value,
-        content={"text": payload.note or payload.status.value, "status": payload.status.value},
+        content={
+            "text": payload.note or payload.status.value,
+            "payload": {"collaboration_ref": str(task.id), "collaboration_status": payload.status.value},
+            "source": "group_collaboration_status",
+        },
     )
     await session.commit()
     await session.refresh(task)
@@ -571,9 +629,17 @@ async def handoff_task(
         session,
         group_id=task.group_id,
         actor_agent_id=principal.id,
-        task_id=task.id,
+        flow_type=FlowType.RUN.value,
         message_type=MessageType.HANDOFF.value,
-        content=payload.summary,
+        content={
+            "text": "Collaboration object handoff",
+            "payload": {
+                "collaboration_ref": str(task.id),
+                "target_agent_id": str(payload.target_agent_id) if payload.target_agent_id else None,
+                "summary": payload.summary,
+            },
+            "source": "group_collaboration_handoff",
+        },
     )
     await session.commit()
     await session.refresh(task)
@@ -613,9 +679,13 @@ async def save_task_result(
         session,
         group_id=task.group_id,
         actor_agent_id=principal.id,
-        task_id=task.id,
+        flow_type=FlowType.RESULT.value,
         message_type=MessageType.SUMMARY.value,
-        content=payload.summary,
+        content={
+            "text": "Collaboration object result summary",
+            "payload": {"collaboration_ref": str(task.id), "summary": payload.summary},
+            "source": "group_collaboration_result",
+        },
     )
     await session.commit()
     await session.refresh(task)
@@ -660,6 +730,94 @@ async def ensure_membership(session: AsyncSession, group_id: uuid.UUID, agent_id
     )
     if membership is None:
         raise AppError("agent is not a member of this group", code="membership_required", status_code=403)
+
+
+async def _get_group_message_or_404(
+    session: AsyncSession,
+    *,
+    message_id: uuid.UUID,
+    group_id: uuid.UUID,
+    missing_code: str,
+    missing_label: str,
+) -> Message:
+    message = await session.get(Message, message_id)
+    if message is None:
+        raise AppError(f"{missing_label} not found", code=missing_code, status_code=404)
+    if message.group_id != group_id:
+        raise AppError(
+            f"{missing_label} must belong to the current group",
+            code=f"{missing_code}_group_mismatch",
+            status_code=400,
+        )
+    return message
+
+
+async def _resolve_message_relations(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    parent_message_id: uuid.UUID | None,
+    thread_id: uuid.UUID | None,
+) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+    resolved_thread_id = thread_id
+    if parent_message_id:
+        parent = await _get_group_message_or_404(
+            session,
+            message_id=parent_message_id,
+            group_id=group_id,
+            missing_code="parent_not_found",
+            missing_label="parent message",
+        )
+        resolved_thread_id = parent.thread_id or parent.id
+        return parent.id, resolved_thread_id
+
+    if resolved_thread_id:
+        thread_root = await _get_group_message_or_404(
+            session,
+            message_id=resolved_thread_id,
+            group_id=group_id,
+            missing_code="thread_not_found",
+            missing_label="thread",
+        )
+        resolved_thread_id = thread_root.thread_id or thread_root.id
+
+    return None, resolved_thread_id
+
+
+async def _validate_target_agent(
+    session: AsyncSession,
+    *,
+    group_id: uuid.UUID,
+    routing: dict[str, Any] | None,
+) -> None:
+    if not isinstance(routing, dict):
+        return
+    target = routing.get("target")
+    if not isinstance(target, dict):
+        return
+    raw_agent_id = str(target.get("agent_id") or "").strip()
+    if not raw_agent_id:
+        return
+    try:
+        target_agent_id = uuid.UUID(raw_agent_id)
+    except ValueError as exc:
+        raise AppError("target agent id is invalid", code="target_agent_invalid", status_code=400) from exc
+
+    agent = await session.get(Agent, target_agent_id)
+    if agent is None or not agent.is_active:
+        raise AppError("target agent not found", code="target_agent_not_found", status_code=404)
+    target_membership = await session.scalar(
+        select(GroupMembership).where(
+            GroupMembership.group_id == group_id,
+            GroupMembership.agent_id == target_agent_id,
+        )
+    )
+    if target_membership is None:
+        raise AppError(
+            "target agent is not a member of this group",
+            code="target_agent_not_in_group",
+            status_code=400,
+        )
 
 
 async def require_group_access(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> None:
@@ -713,10 +871,10 @@ async def get_group_protocol(session: AsyncSession, group_id: uuid.UUID, actor: 
     }
 
 
-async def get_group_channel_context(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
+async def get_group_context(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
     group = await get_group_or_404(session, group_id)
     await require_group_access(session, group_id, actor)
-    return group_channel_context(group)
+    return group_context(group)
 
 
 async def get_agent_protocol_context(
@@ -747,16 +905,16 @@ async def update_group_protocol(
     *,
     group_id: uuid.UUID,
     actor: Any,
-    channel_protocol: dict[str, Any],
+    group_protocol: dict[str, Any],
 ) -> Group:
     if getattr(actor, "actor_type", None) != "admin_user":
-        raise AppError("only admin users can update channel protocol", code="admin_required", status_code=403)
+        raise AppError("only admin users can update group protocol", code="admin_required", status_code=403)
     group = await get_group_or_404(session, group_id)
-    group.metadata_json = update_group_channel_protocol_metadata(
+    group.metadata_json = update_group_protocol_metadata(
         group.metadata_json,
         group_name=group.name,
         group_slug=group.slug,
-        channel_protocol=channel_protocol,
+        group_protocol=group_protocol,
     )
     await session.commit()
     await session.refresh(group)
@@ -892,9 +1050,9 @@ async def create_evented_message(
     *,
     group_id: uuid.UUID,
     actor_agent_id: uuid.UUID,
-    task_id: uuid.UUID | None = None,
     parent_message_id: uuid.UUID | None = None,
     thread_id: uuid.UUID | None = None,
+    flow_type: str,
     message_type: str,
     content: dict[str, Any] | str,
 ) -> tuple[Message, Event]:
@@ -902,42 +1060,31 @@ async def create_evented_message(
     message = Message(
         group_id=group_id,
         agent_id=actor_agent_id,
-        task_id=task_id,
         parent_message_id=parent_message_id,
         thread_id=thread_id,
+        flow_type=flow_type,
         message_type=message_type,
-        content=canonical_v2_to_storage_content(
-            normalize_message_to_canonical_v2(
-                {
-                    "container": {"group_id": str(group_id)},
-                    "author": {"agent_id": str(actor_agent_id)},
-                    "relations": {
-                        "thread_id": str(thread_id) if thread_id else None,
-                        "parent_message_id": str(parent_message_id) if parent_message_id else None,
-                        "task_id": str(task_id) if task_id else None,
-                    },
-                    "body": {
-                        "text": raw_content.get("text"),
-                        "blocks": raw_content.get("blocks") if isinstance(raw_content.get("blocks"), list) else [],
-                        "attachments": (
-                            raw_content.get("attachments") if isinstance(raw_content.get("attachments"), list) else []
-                        ),
-                    },
-                    "semantics": {"kind": message_type},
-                    "routing": {
-                        "mentions": raw_content.get("mentions") if isinstance(raw_content.get("mentions"), list) else [],
-                    },
-                    "extensions": {
-                        "source": raw_content.get("source"),
-                        "custom": {
-                            k: v
-                            for k, v in raw_content.items()
-                            if k not in {"text", "blocks", "attachments", "mentions", "source"}
-                        },
-                    },
-                }
-            )
-        ),
+        content={
+            "text": raw_content.get("text"),
+            "payload": raw_content.get("payload") if isinstance(raw_content.get("payload"), dict) else {},
+            "blocks": raw_content.get("blocks") if isinstance(raw_content.get("blocks"), list) else [],
+            "attachments": raw_content.get("attachments") if isinstance(raw_content.get("attachments"), list) else [],
+        },
+        semantics_json={"flow_type": flow_type, "message_type": message_type},
+        routing_json={
+            "target": {
+                "agent_id": raw_content.get("target_agent_id"),
+            },
+            "mentions": raw_content.get("mentions") if isinstance(raw_content.get("mentions"), list) else [],
+        },
+        extensions_json={
+            "source": raw_content.get("source"),
+            "custom": {
+                k: v
+                for k, v in raw_content.items()
+                if k not in {"text", "payload", "blocks", "attachments", "mentions", "source", "target_agent_id"}
+            },
+        },
     )
     session.add(message)
     await session.flush()

@@ -7,7 +7,6 @@ from app.models.agent import Agent, GroupMembership, Presence
 from app.models.event import Event
 from app.models.group import Group
 from app.models.message import Message
-from app.models.task import Task
 from app.models.webhook import AgentWebhookSubscription, WebhookSubscription
 from app.services.message_protocol_mapper import serialize_summary_v2
 
@@ -40,7 +39,6 @@ async def list_messages(
     *,
     group_id: uuid.UUID,
     thread_id: uuid.UUID | None = None,
-    task_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
     newest_first: bool = False,
@@ -48,15 +46,8 @@ async def list_messages(
     stmt = select(Message).where(Message.group_id == group_id)
     if thread_id:
         stmt = stmt.where(Message.thread_id == thread_id)
-    if task_id:
-        stmt = stmt.where(Message.task_id == task_id)
     order_clause = desc(Message.created_at) if newest_first else Message.created_at
     stmt = stmt.order_by(order_clause).limit(limit).offset(offset)
-    return list((await session.scalars(stmt)).all())
-
-
-async def list_tasks(session: AsyncSession, *, group_id: uuid.UUID) -> list[Task]:
-    stmt = select(Task).where(Task.group_id == group_id).order_by(Task.created_at)
     return list((await session.scalars(stmt)).all())
 
 
@@ -82,7 +73,7 @@ async def list_events(
 async def latest_host_summary(session: AsyncSession, *, group_id: uuid.UUID) -> dict[str, object]:
     stmt = (
         select(Message)
-        .where(Message.group_id == group_id, Message.message_type == "summary")
+        .where(Message.group_id == group_id, Message.flow_type == "result")
         .order_by(desc(Message.created_at))
         .limit(1)
     )

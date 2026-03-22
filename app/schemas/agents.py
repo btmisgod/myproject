@@ -23,7 +23,6 @@ class AgentCreate(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
-    is_moderator: bool = False
 
 
 class AgentRead(ORMModel):
@@ -31,7 +30,6 @@ class AgentRead(ORMModel):
     name: str
     description: str | None
     metadata_json: dict[str, Any]
-    is_moderator: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -34,7 +34,7 @@ def make_bus(adapter: MockDeliveryAdapter) -> CommunityMessageBus:
 
 def make_envelope(
     *,
-    channel_id: str,
+    group_id: str,
     payload: dict,
     target_agent_id: str | None = None,
     mentions: list | None = None,
@@ -43,7 +43,7 @@ def make_envelope(
         message_id="msg-001",
         category="channel_message",
         event_type="message.posted",
-        channel_id=channel_id,
+        channel_id=group_id,
         payload=payload,
         priority="normal",
         timestamp="2026-03-18T00:00:00+00:00",
@@ -61,7 +61,7 @@ async def test_protocol_validation_pass_routes_normally() -> None:
     adapter = MockDeliveryAdapter()
     bus = make_bus(adapter)
     envelope = make_envelope(
-        channel_id="channel-alpha",
+        group_id="group-alpha",
         payload={"text": "normal collaboration message"},
         target_agent_id="agent-target",
     )
@@ -81,7 +81,7 @@ async def test_protocol_validation_warn_continues_and_marks_metadata() -> None:
     adapter = MockDeliveryAdapter()
     bus = make_bus(adapter)
     envelope = make_envelope(
-        channel_id="channel-alpha",
+        group_id="group-alpha",
         payload={"text": "message without explicit target"},
         target_agent_id=None,
     )
@@ -101,15 +101,15 @@ async def test_protocol_validation_block_stops_before_delivery() -> None:
     adapter = MockDeliveryAdapter()
     bus = make_bus(adapter)
     envelope = make_envelope(
-        channel_id="",
-        payload={"text": "message missing channel"},
+        group_id="",
+        payload={"text": "message missing group"},
         target_agent_id="agent-target",
     )
 
     with pytest.raises(AppError) as exc:
         await bus.publish(envelope)
 
-    assert exc.value.code == "channel_id_missing"
+    assert exc.value.code == "group_id_missing"
     assert adapter.deliveries == []
 
 
@@ -118,8 +118,8 @@ async def test_protocol_validation_reroute_suggest_continues_and_marks_metadata(
     adapter = MockDeliveryAdapter()
     bus = make_bus(adapter)
     envelope = make_envelope(
-        channel_id="channel-alpha",
-        payload={"text": "please move this wrong-channel discussion", "marker": "wrong-channel"},
+        group_id="group-alpha",
+        payload={"text": "please move this wrong-group collaboration", "marker": "wrong-group"},
         target_agent_id="agent-target",
     )
 
@@ -129,5 +129,5 @@ async def test_protocol_validation_reroute_suggest_continues_and_marks_metadata(
     assert len(adapter.deliveries) == 1
     delivered_envelope, _ = adapter.deliveries[0]
     assert delivered_envelope.metadata["protocol_validation"]["decision"] == "reroute_suggest"
-    assert delivered_envelope.metadata["protocol_validation"]["suggested_channel_id"] == "suggested-channel"
+    assert delivered_envelope.metadata["protocol_validation"]["suggested_group_id"] == "suggested-group"
     assert delivered_envelope.metadata["protocol_reroute_suggest"] is True

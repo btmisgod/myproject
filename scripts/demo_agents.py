@@ -46,7 +46,7 @@ async def create_group(client: httpx.AsyncClient, token: str, slug: str) -> dict
         groups = await client.get(f"{BASE_URL}/groups")
         groups.raise_for_status()
         for group in groups.json()["data"]:
-            if group["slug"] == "demo-build-squad":
+            if group["slug"] == slug:
                 return group
     response.raise_for_status()
     return response.json()["data"]
@@ -56,7 +56,7 @@ async def join_group(client: httpx.AsyncClient, group_id: str, token: str) -> No
     response = await client.post(
         f"{BASE_URL}/groups/{group_id}/join",
         headers={"X-Agent-Token": token},
-        json={"role": "member"},
+        json={},
     )
     response.raise_for_status()
 
@@ -78,57 +78,60 @@ async def demo_run() -> None:
         for token in [planner["token"], reviewer["token"]]:
             await join_group(client, group["id"], token)
 
-        task_response = await client.post(
-            f"{BASE_URL}/tasks",
-            headers={"X-Agent-Token": host["token"]},
-            json={
-                "group_id": group["id"],
-                "title": "Build community bootstrap",
-                "description": "Create the first deployable community skeleton",
-                "metadata_json": {"priority": "high"},
-            },
-        )
-        task_response.raise_for_status()
-        task = task_response.json()["data"]
-
-        await client.post(
-            f"{BASE_URL}/tasks/{task['id']}/claim",
-            headers={"X-Agent-Token": planner["token"]},
-            json={"note": "I will draft the initial API and event model."},
-        )
         thread_root = await post_message(
             client,
             planner["token"],
             {
-                "container": {"group_id": group["id"]},
-                "relations": {"task_id": task["id"]},
-                "body": {"text": "We need a shared event model and public group-only message flow."},
-                "semantics": {"kind": "analysis"},
+                "group_id": group["id"],
+                "flow_type": "start",
+                "message_type": "proposal",
+                "content": {"text": "We need a shared event model and public group-only message flow."},
+                "relations": {},
+                "routing": {"target": {"agent_id": reviewer["id"]}, "mentions": []},
+                "extensions": {},
             },
         )
         await post_message(
             client,
             reviewer["token"],
             {
-                "container": {"group_id": group["id"]},
+                "group_id": group["id"],
+                "flow_type": "run",
+                "message_type": "review",
                 "relations": {
-                    "task_id": task["id"],
                     "thread_id": message_thread_id(thread_root),
                     "parent_message_id": message_id(thread_root),
                 },
-                "body": {"text": "Approved. Keep DM disabled and task transitions public."},
-                "semantics": {"kind": "review"},
+                "content": {"text": "Approved. Keep DM disabled and collaboration facts public."},
+                "routing": {"target": {"agent_id": planner["id"]}, "mentions": []},
+                "extensions": {},
             },
         )
-        await client.post(
-            f"{BASE_URL}/tasks/{task['id']}/status",
-            headers={"X-Agent-Token": planner["token"]},
-            json={"status": "in_progress", "note": "Implementing API routes and projector hooks."},
+        await post_message(
+            client,
+            planner["token"],
+            {
+                "group_id": group["id"],
+                "flow_type": "status",
+                "message_type": "progress",
+                "content": {"text": "Implementing API routes and projector hooks."},
+                "relations": {"thread_id": message_thread_id(thread_root)},
+                "routing": {"target": {"agent_id": None}, "mentions": []},
+                "extensions": {},
+            },
         )
-        await client.post(
-            f"{BASE_URL}/tasks/{task['id']}/result-summary",
-            headers={"X-Agent-Token": host["token"]},
-            json={"summary": {"text": "Demo run completed", "task_id": task["id"]}},
+        await post_message(
+            client,
+            host["token"],
+            {
+                "group_id": group["id"],
+                "flow_type": "result",
+                "message_type": "summary",
+                "content": {"text": "Demo collaboration round completed."},
+                "relations": {"thread_id": message_thread_id(thread_root)},
+                "routing": {"target": {"agent_id": None}, "mentions": []},
+                "extensions": {},
+            },
         )
 
         snapshot = await client.get(f"{BASE_URL}/projection/groups/{group['id']}/snapshot")

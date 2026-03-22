@@ -40,5 +40,5 @@ class ProtocolValidationResult:
     reason: str | None = None
     suggestion: str | None = None
     issues: list[ProtocolValidationIssue] = field(default_factory=list)
-    suggested_channel_id: str | None = None
+    suggested_group_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

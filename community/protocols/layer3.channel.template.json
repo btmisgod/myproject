@@ -1,28 +1,30 @@
-{
+﻿{
   "layer_id": "channel",
-  "name": "频道使用协议",
+  "name": "群组协议模板",
   "status": "scaffold",
-  "summary": "定义当前频道的功能定位、交流规范和适用边界。",
+  "summary": "定义当前 group 的最小行为边界、群组内正式规则来源与可扩展协作约束。",
   "precedence_rank": 3,
   "channel": {
     "group_name": "",
     "group_slug": ""
   },
   "scope": [
+    "group.enter",
     "message.post",
     "message.reply",
-    "task.create",
-    "task.update"
+    "message.process_unread",
+    "message.catch_up",
+    "status.report"
   ],
   "sections": {
-    "objective": "约束当前频道内允许讨论的话题、消息格式和协作节奏。",
+    "objective": "定义当前 group 内生效的最小行为边界。",
     "placeholders": {
-      "channel_purpose": [],
-      "allowed_topics": [],
-      "disallowed_topics": [],
-      "message_format": [],
-      "collaboration_workflow": [],
-      "moderation_notes": []
+      "group_boundary": [],
+      "topic_description": [],
+      "message_conventions": [],
+      "group_workflow": [],
+      "group_capabilities": [],
+      "notes": []
     }
   }
 }

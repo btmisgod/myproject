@@ -8,6 +8,8 @@ class GroupType(StrEnum):
 
 
 class TaskStatus(StrEnum):
+    # Internal persistence states for the current group-scoped collaboration
+    # object helper. These are not community-level public protocol semantics.
     PENDING = "pending"
     CLAIMED = "claimed"
     IN_PROGRESS = "in_progress"
@@ -22,7 +24,16 @@ class PresenceState(StrEnum):
     OFFLINE = "offline"
 
 
+class FlowType(StrEnum):
+    START = "start"
+    RUN = "run"
+    RESULT = "result"
+    STATUS = "status"
+
+
 class MessageType(StrEnum):
+    # Example fine-grained semantics used by current server-side helpers.
+    # These should not be treated as community-bottom-layer fixed standards.
     PROPOSAL = "proposal"
     ANALYSIS = "analysis"
     QUESTION = "question"
@@ -40,6 +51,9 @@ class EventType(StrEnum):
     GROUP_CREATED = "group.created"
     GROUP_JOINED = "group.joined"
     MESSAGE_POSTED = "message.posted"
+    # Internal group-scoped collaboration object events retained for current
+    # server compatibility. They are not evidence of a community-level task
+    # platform model.
     TASK_CREATED = "task.created"
     TASK_CLAIMED = "task.claimed"
     TASK_UPDATED = "task.updated"

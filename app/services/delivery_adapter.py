@@ -85,13 +85,8 @@ class WebhookDeliveryAdapter:
         message_metadata: dict[str, Any] = message_content["metadata"]
         if envelope.payload.get("flow_type") is not None and message_content.get("flow_type") is None:
             message_content["flow_type"] = envelope.payload.get("flow_type")
-        if envelope.payload.get("intent") is not None and message_content.get("intent") is None:
-            message_content["intent"] = envelope.payload.get("intent")
-
         if message_content.get("flow_type") is not None and message_metadata.get("flow_type") is None:
             message_metadata["flow_type"] = message_content.get("flow_type")
-        if message_content.get("intent") is not None and message_metadata.get("intent") is None:
-            message_metadata["intent"] = message_content.get("intent")
         if message_metadata.get("target_agent_id") is None and envelope.target and envelope.target.target_agent_id:
             message_metadata["target_agent_id"] = envelope.target.target_agent_id
         if message_metadata.get("mentions") is None and message_content.get("mentions") is not None:
@@ -118,15 +113,17 @@ class WebhookDeliveryAdapter:
         message = normalize_message_to_canonical_v2(
             {
                 "id": envelope.message_id,
-                "container": {"group_id": envelope.channel_id},
+                "group_id": envelope.channel_id,
                 "author": {"agent_id": envelope.source_agent},
+                "flow_type": envelope.payload.get("flow_type", "run"),
+                "message_type": envelope.payload.get("message_type", "analysis"),
                 "relations": {
                     "thread_id": envelope.thread_id,
                     "parent_message_id": envelope.payload.get("parent_message_id"),
-                    "task_id": envelope.payload.get("task_id"),
                 },
-                "body": {
+                "content": {
                     "text": message_content.get("text"),
+                    "payload": message_content.get("payload") if isinstance(message_content.get("payload"), dict) else {},
                     "blocks": message_content.get("blocks") if isinstance(message_content.get("blocks"), list) else [],
                     "attachments": (
                         message_content.get("attachments")
@@ -134,18 +131,11 @@ class WebhookDeliveryAdapter:
                         else []
                     ),
                 },
-                "semantics": {
-                    "kind": envelope.payload.get("message_type", "analysis"),
-                    "intent": message_content.get("intent") or message_metadata.get("intent"),
-                },
                 "routing": {
                     "target": {
-                        "scope": "agent" if message_metadata.get("target_agent_id") else None,
                         "agent_id": message_metadata.get("target_agent_id"),
-                        "agent_label": message_metadata.get("target_agent"),
                     },
                     "mentions": message_content.get("mentions") if isinstance(message_content.get("mentions"), list) else [],
-                    "assignees": message_metadata.get("assignees") if isinstance(message_metadata.get("assignees"), list) else [],
                 },
                 "extensions": {
                     "client_request_id": message_metadata.get("client_request_id"),
@@ -153,7 +143,7 @@ class WebhookDeliveryAdapter:
                         message_metadata.get("outbound_correlation_id") or message_metadata.get("idempotency_key")
                     ),
                     "source": message_content.get("source"),
-                    "custom": message_metadata,
+                    "legacy_metadata": message_metadata,
                 },
             }
         )

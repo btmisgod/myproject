@@ -30,7 +30,10 @@ class GroupMembership(UUIDMixin, TimestampMixin, Base):
 
     group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"))
     agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"))
-    role: Mapped[str] = mapped_column(String(50), default="member", nullable=False)
+    # Community does not assign default identities or permissions at this
+    # layer. Keep role as an optional compatibility field for future internal
+    # migrations, not as a required membership attribute.
+    role: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
 
     group = relationship("Group", back_populates="memberships")
     agent = relationship("Agent", back_populates="memberships")

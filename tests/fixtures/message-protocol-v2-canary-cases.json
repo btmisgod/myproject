@@ -2,63 +2,71 @@
   "canary_agent": "proto-v2-canary",
   "scenarios": [
     {
-      "name": "discussion",
+      "name": "start",
       "message": {
-        "container": {"group_id": "group-canary"},
+        "group_id": "group-canary",
         "author": {"agent_id": "agent-other"},
-        "relations": {"thread_id": "thread-discussion", "parent_message_id": null, "task_id": null},
-        "body": {"text": "Need thoughts on this proposal.", "blocks": [], "attachments": []},
-        "semantics": {"kind": "analysis", "intent": "inform", "topic": "proposal-review"},
-        "routing": {"target": {"scope": null, "agent_id": null, "agent_label": null}, "mentions": [], "assignees": []},
-        "extensions": {"client_request_id": "req-discussion", "outbound_correlation_id": "corr-discussion", "source": "canary", "custom": {}}
+        "flow_type": "start",
+        "message_type": "proposal",
+        "relations": {"thread_id": "thread-start", "parent_message_id": null},
+        "content": {"text": "Let's start a new coordination round.", "payload": {}, "blocks": [], "attachments": []},
+        "routing": {"target": {"agent_id": null}, "mentions": []},
+        "extensions": {"client_request_id": "req-start", "outbound_correlation_id": "corr-start", "source": "canary"}
       }
     },
     {
-      "name": "targeted_task",
+      "name": "targeted_run",
       "message": {
-        "container": {"group_id": "group-canary"},
+        "group_id": "group-canary",
         "author": {"agent_id": "agent-other"},
-        "relations": {"thread_id": "thread-task", "parent_message_id": null, "task_id": "task-canary"},
-        "body": {"text": "@proto-v2-canary please execute this task.", "blocks": [], "attachments": []},
-        "semantics": {"kind": "proposal", "intent": "request_action", "topic": "execution"},
-        "routing": {"target": {"scope": "agent", "agent_id": "proto-v2-canary", "agent_label": "Proto V2 Canary"}, "mentions": [{"mention_type": "agent", "mention_id": "proto-v2-canary", "display_text": "@proto-v2-canary"}], "assignees": ["proto-v2-canary"]},
-        "extensions": {"client_request_id": "req-task", "outbound_correlation_id": "corr-task", "source": "canary", "custom": {}}
+        "flow_type": "run",
+        "message_type": "discussion",
+        "relations": {"thread_id": "thread-run", "parent_message_id": null},
+        "content": {"text": "@proto-v2-canary please respond in this round.", "payload": {}, "blocks": [], "attachments": []},
+        "routing": {
+          "target": {"agent_id": "proto-v2-canary"},
+          "mentions": [{"mention_type": "agent", "mention_id": "proto-v2-canary", "display_text": "@proto-v2-canary"}]
+        },
+        "extensions": {"client_request_id": "req-run", "outbound_correlation_id": "corr-run", "source": "canary"}
       }
     },
     {
       "name": "status",
       "message": {
-        "container": {"group_id": "group-canary"},
+        "group_id": "group-canary",
         "author": {"agent_id": "agent-other"},
-        "relations": {"thread_id": "thread-status", "parent_message_id": null, "task_id": null},
-        "body": {"text": "Progress update.", "blocks": [], "attachments": []},
-        "semantics": {"kind": "progress", "intent": "inform", "topic": "status"},
-        "routing": {"target": {"scope": null, "agent_id": null, "agent_label": null}, "mentions": [], "assignees": []},
-        "extensions": {"client_request_id": "req-status", "outbound_correlation_id": "corr-status", "source": "canary", "custom": {}}
+        "flow_type": "status",
+        "message_type": "progress",
+        "relations": {"thread_id": "thread-status", "parent_message_id": null},
+        "content": {"text": "Progress update.", "payload": {}, "blocks": [], "attachments": []},
+        "routing": {"target": {"agent_id": null}, "mentions": []},
+        "extensions": {"client_request_id": "req-status", "outbound_correlation_id": "corr-status", "source": "canary"}
       }
     },
     {
-      "name": "decision",
+      "name": "result",
       "message": {
-        "container": {"group_id": "group-canary"},
+        "group_id": "group-canary",
         "author": {"agent_id": "agent-other"},
-        "relations": {"thread_id": "thread-decision", "parent_message_id": null, "task_id": null},
-        "body": {"text": "We approve the proposal.", "blocks": [], "attachments": []},
-        "semantics": {"kind": "decision", "intent": "decide", "topic": "approval"},
-        "routing": {"target": {"scope": null, "agent_id": null, "agent_label": null}, "mentions": [], "assignees": []},
-        "extensions": {"client_request_id": "req-decision", "outbound_correlation_id": "corr-decision", "source": "canary", "custom": {}}
+        "flow_type": "result",
+        "message_type": "decision",
+        "relations": {"thread_id": "thread-result", "parent_message_id": null},
+        "content": {"text": "We approve the proposal.", "payload": {"decision": "approved"}, "blocks": [], "attachments": []},
+        "routing": {"target": {"agent_id": null}, "mentions": []},
+        "extensions": {"client_request_id": "req-result", "outbound_correlation_id": "corr-result", "source": "canary"}
       }
     },
     {
       "name": "self_echo",
       "message": {
-        "container": {"group_id": "group-canary"},
+        "group_id": "group-canary",
         "author": {"agent_id": "proto-v2-canary"},
-        "relations": {"thread_id": "thread-self", "parent_message_id": null, "task_id": null},
-        "body": {"text": "This is my own message.", "blocks": [], "attachments": []},
-        "semantics": {"kind": "analysis", "intent": "inform", "topic": "self-check"},
-        "routing": {"target": {"scope": null, "agent_id": null, "agent_label": null}, "mentions": [], "assignees": []},
-        "extensions": {"client_request_id": "req-self", "outbound_correlation_id": "corr-self", "source": "canary", "custom": {}}
+        "flow_type": "run",
+        "message_type": "analysis",
+        "relations": {"thread_id": "thread-self", "parent_message_id": null},
+        "content": {"text": "This is my own message.", "payload": {}, "blocks": [], "attachments": []},
+        "routing": {"target": {"agent_id": null}, "mentions": []},
+        "extensions": {"client_request_id": "req-self", "outbound_correlation_id": "corr-self", "source": "canary"}
       }
     }
   ]

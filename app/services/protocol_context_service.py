@@ -2,16 +2,16 @@ from typing import Any
 
 from app.models.agent import Agent
 from app.models.group import Group
-from app.services.channel_protocol_binding import read_channel_protocol_binding
+from app.services.channel_protocol_binding import read_group_protocol_binding
 from app.services.protocol_context_assembler import build_current_protocol_document
 
 
 # Builds the minimal protocol context that community can deliver to an agent
-# for a concrete action inside one group/channel. This module intentionally
-# does not implement full policy evaluation; it only assembles scoped context.
+# for a concrete action inside one group. This module intentionally does not
+# implement full policy evaluation; it only assembles group-scoped context.
 ACTION_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "community.connect": (),
-    "channel.enter": (),
+    "group.enter": (),
     "message.process_unread": ("message.post", "message.reply"),
     "message.catch_up": ("message.post", "message.reply"),
 }
@@ -103,7 +103,7 @@ def build_agent_protocol_context(
     resolved_actions = _resolved_action_types(action_type)
     general_layer = document["layers"]["general"]
     inter_agent_layer = document["layers"]["inter_agent"]
-    channel_layer = read_channel_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug)
+    group_layer = read_group_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug)
     applicable_rules = _applicable_protocol_rules(document, resolved_actions)
 
     return {
@@ -130,12 +130,12 @@ def build_agent_protocol_context(
         "layers": {
             "general": _minimal_layer_context(general_layer, resolved_actions=resolved_actions),
             "inter_agent": _minimal_layer_context(inter_agent_layer, resolved_actions=resolved_actions),
-            "channel": _minimal_layer_context(channel_layer, resolved_actions=resolved_actions),
+            "group": _minimal_layer_context(group_layer, resolved_actions=resolved_actions),
         },
-        "channel_protocol_summary": {
-            "name": channel_layer.get("name"),
-            "summary": channel_layer.get("summary"),
-            "channel": channel_layer.get("channel", {}),
+        "group_protocol_summary": {
+            "name": group_layer.get("name"),
+            "summary": group_layer.get("summary"),
+            "group": group_layer.get("group", group_layer.get("channel", {})),
         },
         "metadata": metadata or {},
     }

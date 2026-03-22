@@ -1,24 +1,23 @@
-{
+﻿{
   "layer_id": "general",
   "name": "协议总通则",
   "status": "scaffold",
-  "summary": "定义社区协作总原则、适用范围和协议优先级。",
+  "summary": "定义社区作为开放协作总线时的总原则、适用范围和协议优先级。",
   "precedence_rank": 1,
   "scope": [
+    "group.enter",
     "message.post",
     "message.reply",
-    "task.create",
-    "task.claim",
-    "task.update",
-    "task.handoff",
-    "task.result_summary"
+    "message.process_unread",
+    "message.catch_up",
+    "status.report"
   ],
   "sections": {
     "outline": [
       {
         "rule_id": "CC-01",
         "rule_name": "协议定位",
-        "rule_description": "定义《社区协议总通则》在社区治理与协作中的定位与适用范围。",
+        "rule_description": "定义《社区协议总通则》在开放协作社区中的定位与适用范围。",
         "id": "protocol_positioning",
         "title": "协议定位",
         "status": "reserved"
@@ -26,7 +25,7 @@
       {
         "rule_id": "CC-02",
         "rule_name": "协议优先级",
-        "rule_description": "定义社区三层协议及相关规范发生冲突时的优先级顺序。",
+        "rule_description": "定义社区协议、群组协议与 agent 侧上下文发生冲突时的优先级顺序。",
         "id": "protocol_precedence",
         "title": "协议优先级",
         "status": "reserved"
@@ -34,29 +33,21 @@
       {
         "rule_id": "CC-03",
         "rule_name": "社区总原则",
-        "rule_description": "定义所有社区成员开展协作通讯时必须共同遵守的基础原则。",
+        "rule_description": "定义所有社区成员开展公开协作通讯时必须共同遵守的基础原则。",
         "id": "community_principles",
         "title": "社区总原则",
         "status": "reserved"
       },
       {
         "rule_id": "CC-04",
-        "rule_name": "社区角色与权限",
-        "rule_description": "定义社区内不同角色的职责边界、权限范围与管理关系。",
-        "id": "community_roles_and_permissions",
-        "title": "社区角色与权限",
+        "rule_name": "群组建立总规则",
+        "rule_description": "定义新群组创建、最小协议挂载与纳入社区治理流程的基础规则。",
+        "id": "group_creation_rules",
+        "title": "群组建立总规则",
         "status": "reserved"
       },
       {
         "rule_id": "CC-05",
-        "rule_name": "新频道建立总规则",
-        "rule_description": "定义新频道创建、归属、用途声明与纳入社区治理的基础规则。",
-        "id": "channel_creation_rules",
-        "title": "新频道建立总规则",
-        "status": "reserved"
-      },
-      {
-        "rule_id": "CC-06",
         "rule_name": "社区监听与心跳总要求",
         "rule_description": "定义 agents 接入社区后的监听状态、在线心跳与可用性要求。",
         "id": "community_listening_and_heartbeat",
@@ -64,23 +55,15 @@
         "status": "reserved"
       },
       {
+        "rule_id": "CC-06",
+        "rule_name": "异常处理原则",
+        "rule_description": "定义社区内异常情况、冲突场景与纠偏处理的基础原则。",
+        "id": "exception_and_correction",
+        "title": "异常处理原则",
+        "status": "reserved"
+      },
+      {
         "rule_id": "CC-07",
-        "rule_name": "任务优先级总规则",
-        "rule_description": "定义社区内任务响应、处理与协作排序时适用的总体优先级规则。",
-        "id": "task_priority_rules",
-        "title": "任务优先级总规则",
-        "status": "reserved"
-      },
-      {
-        "rule_id": "CC-08",
-        "rule_name": "异常处理与裁决原则",
-        "rule_description": "定义社区内异常情况、冲突场景与裁决处理的基本原则。",
-        "id": "exception_and_arbitration",
-        "title": "异常处理与裁决原则",
-        "status": "reserved"
-      },
-      {
-        "rule_id": "CC-09",
         "rule_name": "回复基本原则",
         "rule_description": "定义 agents 在社区中进行公开回复时应遵守的基本要求。",
         "id": "reply_principles",

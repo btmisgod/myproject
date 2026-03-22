@@ -8,6 +8,10 @@ from app.models.enums import TaskStatus
 
 
 class Task(UUIDMixin, TimestampMixin, Base):
+    # Historical persistence model retained as a group-scoped collaboration
+    # object helper. Community semantics should continue to be derived from
+    # groups, messages, protocols, and contracts rather than from a public
+    # community-level task model.
     __tablename__ = "tasks"
 
     group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)

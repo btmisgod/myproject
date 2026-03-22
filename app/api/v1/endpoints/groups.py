@@ -6,14 +6,14 @@ from app.api.v1.deps import DbSession, get_current_actor
 from app.core.response import success
 from app.schemas.common import EventEnvelope
 from app.schemas.groups import GroupCreate, GroupRead, JoinGroupRequest, MembershipRead
-from app.schemas.protocols import ChannelProtocolUpdateRequest
+from app.schemas.protocols import GroupProtocolUpdateRequest
 from app.schemas.webhooks import WebhookSubscriptionCreate, WebhookSubscriptionRead
 from app.services.community import (
     create_group,
     create_webhook_subscription,
     deactivate_webhook_subscription,
     get_group_by_slug_or_404,
-    get_group_channel_context,
+    get_group_context,
     get_group_protocol,
     join_group,
     require_group_access,
@@ -57,7 +57,8 @@ async def join_group_endpoint(
     session: DbSession,
     actor=Depends(get_current_actor),
 ) -> dict:
-    membership = await join_group(session, group_id, actor.agent, payload.role)
+    _ = payload
+    membership = await join_group(session, group_id, actor.agent)
     return success(MembershipRead.model_validate(membership).model_dump(), message="joined group")
 
 
@@ -69,7 +70,8 @@ async def join_group_by_slug_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     group = await get_group_by_slug_or_404(session, slug)
-    membership = await join_group(session, group.id, actor.agent, payload.role)
+    _ = payload
+    membership = await join_group(session, group.id, actor.agent)
     return success(
         {
             "group": GroupRead.model_validate(group).model_dump(),
@@ -100,29 +102,48 @@ async def get_group_protocol_by_slug_endpoint(
     return success(data)
 
 
-@router.get("/{group_id}/channel-context", response_model=dict)
-async def get_group_channel_context_endpoint(
+@router.get("/{group_id}/context", response_model=dict)
+async def get_group_context_endpoint(
     group_id: uuid.UUID,
     session: DbSession,
     actor=Depends(get_current_actor),
 ) -> dict:
-    return success(await get_group_channel_context(session, group_id, actor))
+    return success(await get_group_context(session, group_id, actor))
 
 
-@router.get("/by-slug/{slug}/channel-context", response_model=dict)
-async def get_group_channel_context_by_slug_endpoint(
+@router.get("/{group_id}/channel-context", response_model=dict)
+async def get_group_channel_context_legacy_endpoint(
+    group_id: uuid.UUID,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    return success(await get_group_context(session, group_id, actor))
+
+
+@router.get("/by-slug/{slug}/context", response_model=dict)
+async def get_group_context_by_slug_endpoint(
     slug: str,
     session: DbSession,
     actor=Depends(get_current_actor),
 ) -> dict:
     group = await get_group_by_slug_or_404(session, slug)
-    return success(await get_group_channel_context(session, group.id, actor))
+    return success(await get_group_context(session, group.id, actor))
+
+
+@router.get("/by-slug/{slug}/channel-context", response_model=dict)
+async def get_group_channel_context_by_slug_legacy_endpoint(
+    slug: str,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    group = await get_group_by_slug_or_404(session, slug)
+    return success(await get_group_context(session, group.id, actor))
 
 
 @router.patch("/{group_id}/protocol", response_model=dict)
 async def patch_group_protocol_endpoint(
     group_id: uuid.UUID,
-    payload: ChannelProtocolUpdateRequest,
+    payload: GroupProtocolUpdateRequest,
     session: DbSession,
     actor=Depends(get_current_actor),
 ) -> dict:
@@ -130,9 +151,9 @@ async def patch_group_protocol_endpoint(
         session,
         group_id=group_id,
         actor=actor,
-        channel_protocol=payload.channel_protocol,
+        group_protocol=payload.group_protocol,
     )
-    return success(group_payload := GroupRead.model_validate(group).model_dump(), message="channel protocol updated")
+    return success(GroupRead.model_validate(group).model_dump(), message="group protocol updated")
 
 
 @router.get("/{group_id}/members", response_model=dict)

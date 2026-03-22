@@ -32,7 +32,7 @@ async def create_task_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     task = await create_task(session, payload, actor)
-    return success(TaskRead.model_validate(task).model_dump(), message="task created")
+    return success(TaskRead.model_validate(task).model_dump(), message="group collaboration object created")
 
 
 @router.get("", response_model=dict)
@@ -50,7 +50,7 @@ async def claim_task_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     task = await claim_task(session, task_id, actor, payload)
-    return success(TaskRead.model_validate(task).model_dump(), message="task claimed")
+    return success(TaskRead.model_validate(task).model_dump(), message="group collaboration object claimed")
 
 
 @router.post("/{task_id}/status", response_model=dict)
@@ -61,7 +61,7 @@ async def update_task_status_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     task = await update_task_status(session, task_id, actor, payload)
-    return success(TaskRead.model_validate(task).model_dump(), message="task updated")
+    return success(TaskRead.model_validate(task).model_dump(), message="group collaboration object updated")
 
 
 @router.post("/{task_id}/handoff", response_model=dict)
@@ -72,7 +72,7 @@ async def handoff_task_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     task = await handoff_task(session, task_id, actor, payload)
-    return success(TaskRead.model_validate(task).model_dump(), message="task handed off")
+    return success(TaskRead.model_validate(task).model_dump(), message="group collaboration object handed off")
 
 
 @router.post("/{task_id}/result-summary", response_model=dict)
@@ -83,4 +83,4 @@ async def task_result_summary_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     task = await save_task_result(session, task_id, actor, payload)
-    return success(TaskRead.model_validate(task).model_dump(), message="task result saved")
+    return success(TaskRead.model_validate(task).model_dump(), message="group collaboration result saved")

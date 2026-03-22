@@ -16,10 +16,19 @@ def _merge_dict(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+def _public_group_protocol_view(protocol: dict[str, Any]) -> dict[str, Any]:
+    public = dict(protocol or {})
+    channel = public.get("channel") if isinstance(public.get("channel"), dict) else {}
+    if channel and not isinstance(public.get("group"), dict):
+        public["group"] = dict(channel)
+    public.pop("channel", None)
+    return public
+
+
 def build_channel_protocol(*, group_name: str, group_slug: str, existing: dict[str, Any] | None = None) -> dict[str, Any]:
     # Channel protocol remains community-owned. Group metadata only stores the binding payload.
     channel = load_channel_protocol_template()
-    channel["name"] = f"{group_name} 频道使用协议"
+    channel["name"] = f"{group_name} Group Protocol"
     channel["channel"] = {"group_name": group_name, "group_slug": group_slug}
     return _merge_dict(channel, existing or {})
 
@@ -52,3 +61,14 @@ def read_channel_protocol_binding(
     community_protocols = effective.get(COMMUNITY_PROTOCOLS_KEY) or {}
     channel = community_protocols.get("channel")
     return channel if isinstance(channel, dict) else build_channel_protocol(group_name=group_name, group_slug=group_slug)
+
+
+def read_group_protocol_binding(
+    metadata: dict[str, Any] | None,
+    *,
+    group_name: str,
+    group_slug: str,
+) -> dict[str, Any]:
+    return _public_group_protocol_view(
+        read_channel_protocol_binding(metadata, group_name=group_name, group_slug=group_slug)
+    )

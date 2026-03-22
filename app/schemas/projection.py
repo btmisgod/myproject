@@ -8,14 +8,12 @@ from app.schemas.common import EventEnvelope
 from app.schemas.groups import GroupRead
 from app.schemas.messages import MessageRead
 from app.schemas.presence import PresenceRead
-from app.schemas.tasks import TaskRead
 
 
 class GroupProjectionSnapshot(BaseModel):
     group: GroupRead
     members: list[AgentRead]
     online_members: list[PresenceRead]
-    tasks: list[TaskRead]
     latest_messages: list[MessageRead]
     latest_events: list[EventEnvelope]
     host_summary: dict[str, Any]

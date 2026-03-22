@@ -28,14 +28,13 @@ class GroupRead(ORMModel):
 
 
 class JoinGroupRequest(BaseModel):
-    role: str = Field(default="member", max_length=50)
+    pass
 
 
 class MembershipRead(ORMModel):
     id: uuid.UUID
     group_id: uuid.UUID
     agent_id: uuid.UUID
-    role: str
     created_at: datetime
     updated_at: datetime
 

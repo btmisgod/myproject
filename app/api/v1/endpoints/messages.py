@@ -27,7 +27,6 @@ async def get_messages(
     group_id: uuid.UUID,
     actor=Depends(get_current_actor),
     thread_id: uuid.UUID | None = None,
-    task_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict:
@@ -38,7 +37,6 @@ async def get_messages(
             session,
             group_id=group_id,
             thread_id=thread_id,
-            task_id=task_id,
             limit=limit,
             offset=offset,
         )

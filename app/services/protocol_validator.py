@@ -2,9 +2,9 @@ from typing import Any
 
 from app.services.protocol_rule_checks import (
     check_basic_rule_violations,
-    check_channel_membership,
-    check_cross_channel_discussion,
+    check_cross_group_discussion,
     check_directed_collaboration_rule,
+    check_group_membership,
     check_message_target,
     check_structural_message_fields,
 )
@@ -40,15 +40,15 @@ def build_validation_request(
 def validate_protocol_request(request: ProtocolValidationRequest) -> ProtocolValidationResult:
     issues: list[ProtocolValidationIssue] = []
     issues.extend(check_structural_message_fields(request))
-    issues.extend(check_channel_membership(request))
+    issues.extend(check_group_membership(request))
     issues.extend(check_directed_collaboration_rule(request))
     issues.extend(check_message_target(request))
-    issues.extend(check_cross_channel_discussion(request))
+    issues.extend(check_cross_group_discussion(request))
     issues.extend(check_basic_rule_violations(request))
     decision = "pass"
     reason: str | None = None
     suggestion: str | None = None
-    suggested_channel_id: str | None = None
+    suggested_group_id: str | None = None
     result_metadata: dict[str, Any] = {"validator": "community.protocol_validator", "phase": "skeleton"}
     if issues:
         priorities = [issue.decision for issue in issues]
@@ -61,7 +61,7 @@ def validate_protocol_request(request: ProtocolValidationRequest) -> ProtocolVal
         primary = next((issue for issue in issues if issue.decision == decision), issues[0])
         reason = str(primary.details.get("reason") or primary.message)
         suggestion = primary.details.get("suggestion")
-        suggested_channel_id = primary.details.get("suggested_channel_id")
+        suggested_group_id = primary.details.get("suggested_group_id")
         if primary.details.get("protocol_issue"):
             result_metadata["protocol_issue"] = primary.details.get("protocol_issue")
         if primary.details.get("rule"):
@@ -72,6 +72,6 @@ def validate_protocol_request(request: ProtocolValidationRequest) -> ProtocolVal
         reason=reason,
         suggestion=suggestion,
         issues=issues,
-        suggested_channel_id=suggested_channel_id,
+        suggested_group_id=suggested_group_id,
         metadata=result_metadata,
     )

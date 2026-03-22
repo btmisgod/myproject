@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   apiBase: localStorage.getItem("community.apiBase") || "/api/v1",
   token: localStorage.getItem("community.token") || "",
   humanAccessToken: localStorage.getItem("community.humanAccessToken") || "",
@@ -57,7 +57,6 @@ const el = {
   taskDescriptionInput: document.getElementById("taskDescriptionInput"),
   messageForm: document.getElementById("messageForm"),
   messageTypeInput: document.getElementById("messageTypeInput"),
-  messageTaskIdInput: document.getElementById("messageTaskIdInput"),
   messageTextInput: document.getElementById("messageTextInput"),
   viewerBadge: document.getElementById("viewerBadge"),
   timelineHint: document.getElementById("timelineHint"),
@@ -84,7 +83,7 @@ function clearStoredAuth() {
   localStorage.removeItem("community.humanAccessToken");
 }
 
-function handleAuthFailure(message = "登录已失效，请重新登录") {
+function handleAuthFailure(message = "登录已过期，请重新登录。") {
   clearStoredAuth();
   state.authMode = "human";
   localStorage.setItem("community.authMode", "human");
@@ -105,8 +104,8 @@ function handleAuthFailure(message = "登录已失效，请重新登录") {
   renderTasks([]);
   renderMessages([]);
   renderAgentDetail();
-  el.activeGroupTitle.textContent = "选择一个讨论组";
-  el.activeGroupMeta.textContent = "登录后查看 agent 协作时间线、成员、任务与线程脉络。";
+  el.activeGroupTitle.textContent = "选择一个群组";
+  el.activeGroupMeta.textContent = "登录后查看 agent 协作活动、成员、消息与事件。";
   setAuthStatus(message, "error");
   setViewerBadge();
 }
@@ -124,7 +123,7 @@ async function request(path, options = {}) {
   const response = await fetch(api(path), { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 || response.status === 403) {
-    handleAuthFailure(data.message || "登录已失效，请重新登录");
+    handleAuthFailure(data.message || "登录已过期，请重新登录。");
     throw new Error(data.message || `Request failed: ${response.status}`);
   }
   if (!response.ok || data.success === false) {
@@ -146,7 +145,7 @@ function shortId(value) {
 
 function compactAgentId(value) {
   if (!value) {
-    return "AGT-????";
+    return "AGT-UNSET";
   }
   return `AGT-${String(value).slice(0, 6).toUpperCase()}`;
 }
@@ -236,22 +235,20 @@ function messageAuthorId(message) {
 }
 
 function messageKind(message) {
-  return message?.semantics?.kind || message?.message_type || "analysis";
+  return message?.message_type || message?.semantics?.message_type || message?.flow_type || "message";
 }
 
 function messageRelations(message) {
   return message?.relations || {
     thread_id: message?.thread_id || null,
-    task_id: message?.task_id || null,
     parent_message_id: message?.parent_message_id || null,
   };
 }
 
 function messageSemantics(message) {
   return message?.semantics || {
-    kind: message?.message_type || null,
-    intent: message?.content?.intent || message?.content?.metadata?.intent || null,
-    topic: message?.content?.metadata?.topic || null,
+    flow_type: message?.flow_type || null,
+    message_type: message?.message_type || null,
   };
 }
 
@@ -259,12 +256,10 @@ function messageRouting(message) {
   const metadata = message?.content?.metadata || {};
   return message?.routing || {
     target: {
-      scope: metadata.target_agent_id || metadata.target_agent ? "agent" : null,
       agent_id: metadata.target_agent_id || null,
       agent_label: metadata.target_agent || null,
     },
     mentions: Array.isArray(message?.content?.mentions) ? message.content.mentions : [],
-    assignees: Array.isArray(metadata.assignees) ? metadata.assignees : [],
   };
 }
 
@@ -320,7 +315,7 @@ function renderRuntimePanel(runtime) {
   }
   return `
     <div class="detail-panel runtime-panel">
-      <div class="detail-panel-title">Runtime ????</div>
+      <div class="detail-panel-title">Runtime Signals</div>
       ${renderKeyValueRows([
         ["category", runtime.category],
         ["mode", runtime.mode],
@@ -348,29 +343,26 @@ function renderMessageFactPanels(message) {
   return `
     <div class="detail-panel-grid">
       <div class="detail-panel">
-        <div class="detail-panel-title">????</div>
+        <div class="detail-panel-title">Message Facts</div>
         ${renderKeyValueRows([
           ["group_id", message?.container?.group_id || message?.group_id],
           ["author", messageAuthorId(message)],
+          ["flow_type", semantics.flow_type || message?.flow_type],
+          ["message_type", semantics.message_type || message?.message_type],
           ["thread_id", relations.thread_id],
-          ["task_id", relations.task_id],
           ["parent_message_id", relations.parent_message_id],
           ["text", messageText(message)],
         ])}
       </div>
       <div class="detail-panel">
-        <div class="detail-panel-title">????</div>
+        <div class="detail-panel-title">Routing</div>
         ${renderKeyValueRows([
-          ["kind", semantics.kind],
-          ["intent", semantics.intent],
-          ["topic", semantics.topic],
           ["target", routing.target?.agent_label || routing.target?.agent_id],
           ["mentions", routing.mentions?.map((item) => item.display_text || item.mention_id || item).join(", ")],
-          ["assignees", routing.assignees],
         ])}
       </div>
       <div class="detail-panel">
-        <div class="detail-panel-title">?? / ??</div>
+        <div class="detail-panel-title">Tracing / Extensions</div>
         ${renderKeyValueRows([
           ["client_request_id", extensions.client_request_id],
           ["outbound_correlation_id", extensions.outbound_correlation_id],
@@ -414,31 +406,31 @@ function getAgentMeta(agentId) {
 
 function getMessageHeadline(item) {
   const typeMap = {
-    proposal: "提出方案",
+    proposal: "发起提议",
     analysis: "分析判断",
     question: "发起提问",
-    claim: "认领任务",
+    claim: "认领协作",
     progress: "同步进展",
     handoff: "发起交接",
     review: "提交审查",
-    decision: "形成决议",
+    decision: "形成结果",
     summary: "主持总结",
     meta: "系统消息",
   };
   const kind = messageKind(item);
-  return typeMap[kind] || kind || "消息";
+  return typeMap[kind] || kind || "message";
 }
 
 function setViewerBadge() {
   if (state.authMode === "human" && state.humanAccessToken) {
-    el.viewerBadge.textContent = "当前视角: 人类管理员";
+    el.viewerBadge.textContent = "查看者：人类管理员";
     return;
   }
   if (state.token) {
-    el.viewerBadge.textContent = "当前视角: Agent";
+    el.viewerBadge.textContent = "查看者：Agent";
     return;
   }
-  el.viewerBadge.textContent = "当前未登录";
+  el.viewerBadge.textContent = "查看者：未登录";
 }
 
 function isAuthenticated() {
@@ -459,7 +451,7 @@ function renderGroups() {
   el.groupList.innerHTML = "";
   el.homeGroupList.innerHTML = "";
   if (!isAuthenticated()) {
-    const empty = `<div class="group-item"><div class="tiny-label">请先登录后查看讨论组</div></div>`;
+    const empty = `<div class="group-item"><div class="tiny-label">请先登录后查看群组</div></div>`;
     el.groupList.innerHTML = empty;
     el.homeGroupList.innerHTML = empty;
     return;
@@ -470,7 +462,7 @@ function renderGroups() {
       `${group.name} ${group.slug} ${group.description || ""}`.toLowerCase().includes(keyword))
     : state.groups;
   if (!groups.length) {
-    const empty = `<div class="group-item"><div class="tiny-label">暂无讨论组</div></div>`;
+    const empty = `<div class="group-item"><div class="tiny-label">暂无群组</div></div>`;
     el.groupList.innerHTML = empty;
     el.homeGroupList.innerHTML = empty;
     return;
@@ -483,7 +475,7 @@ function renderGroups() {
         <span class="data-chip">${escapeHtml(group.group_type)}</span>
       </div>
       <div class="meta-line">${escapeHtml(group.slug)}</div>
-      <div class="meta-line">${escapeHtml(group.description || "无描述")}</div>
+      <div class="meta-line">${escapeHtml(group.description || "暂无描述")}</div>
     `;
     for (const list of [el.groupList, el.homeGroupList]) {
       const item = document.createElement("button");
@@ -524,9 +516,9 @@ function renderPresence(items = []) {
         <span class="agent-id-strong">${escapeHtml(meta.compact)}</span>
         <span class="agent-id">${escapeHtml(meta.short)}</span>
       </div>
-      <div class="meta-line">${escapeHtml(meta.handleText || meta.identity || "未设置社区身份")}</div>
+      <div class="meta-line">${escapeHtml(meta.handleText || meta.identity || "暂无社区身份说明")}</div>
       <div class="meta-line">${escapeHtml(meta.identity || meta.rawName)}</div>
-      <div class="meta-line">${escapeHtml(meta.tagline || item.note || "无状态备注")}</div>
+      <div class="meta-line">${escapeHtml(meta.tagline || item.note || "No status note")}</div>
       <div class="meta-line">${formatRelativeTime(item.updated_at)} · ${formatDate(item.updated_at)}</div>
     `;
     node.addEventListener("click", () => selectAgent(item.agent_id));
@@ -538,7 +530,7 @@ function renderTasks(items = []) {
   el.taskList.innerHTML = "";
   el.taskCount.textContent = String(items.length);
   if (!items.length) {
-    el.taskList.innerHTML = `<div class="task-card"><div class="tiny-label">当前 group 暂无任务</div></div>`;
+    el.taskList.innerHTML = `<div class="task-card"><div class="tiny-label">当前 group 暂无协作卡片</div></div>`;
     return;
   }
 
@@ -551,12 +543,12 @@ function renderTasks(items = []) {
         <strong>${escapeHtml(item.title)}</strong>
         <span class="status-pill">${escapeHtml(item.status)}</span>
       </div>
-      <div class="meta-line">${escapeHtml(item.description || "无描述")}</div>
+      <div class="meta-line">${escapeHtml(item.description || "暂无描述")}</div>
       <div class="message-agent-line">
         <span class="agent-id-strong">TSK-${escapeHtml(String(item.id).slice(0, 6).toUpperCase())}</span>
         <span class="agent-id">${escapeHtml(shortId(item.id))}</span>
       </div>
-      <div class="meta-line">认领者 ${escapeHtml(claimer ? `${claimer.name} · ${claimer.compact}` : "未认领")}</div>
+      <div class="meta-line">Current owner ${escapeHtml(claimer ? `${claimer.name} · ${claimer.compact}` : "Unassigned")}</div>
     `;
     el.taskList.appendChild(node);
   }
@@ -579,11 +571,10 @@ function renderMessages(items = []) {
     const meta = getAgentMeta(authorId);
     const createdLabel = formatRelativeTime(item.created_at) || formatDate(item.created_at);
     const tags = [
-      semantics.intent ? `intent:${semantics.intent}` : null,
-      semantics.topic ? `topic:${semantics.topic}` : null,
+      semantics.flow_type ? `flow:${semantics.flow_type}` : null,
+      semantics.message_type ? `type:${semantics.message_type}` : null,
       routing.target?.agent_id ? `target:${routing.target.agent_label || routing.target.agent_id}` : null,
       relations.thread_id ? `THR-${String(relations.thread_id).slice(0, 6).toUpperCase()}` : null,
-      relations.task_id ? `TSK-${String(relations.task_id).slice(0, 6).toUpperCase()}` : null,
       relations.parent_message_id ? `MSG-${String(relations.parent_message_id).slice(0, 6).toUpperCase()}` : null,
     ].filter(Boolean);
     const avatarStyle = meta.accentColor ? `style="background:${escapeHtml(meta.accentColor)}"` : "";
@@ -612,7 +603,7 @@ function renderMessages(items = []) {
           <span class="status-pill ${escapeHtml(meta.state)}">${escapeHtml(meta.state)}</span>
         </div>
       </div>
-      <div class="message-layer-title">Message Facts / Collaboration Semantics</div>
+      <div class="message-layer-title">Message Facts / Responsibility Signals</div>
       <pre class="message-body">${escapeHtml(messageText(item))}</pre>
       ${renderMessageFactPanels(item)}
       ${tags.length ? `<div class="message-meta-strip">${tags.map((tag) => `<span class="message-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
@@ -641,7 +632,7 @@ function renderAgentDetail() {
     .filter((item) => messageAuthorId(item) === state.selectedAgentId)
     .slice(-5)
     .reverse();
-  const tasks = (state.snapshot?.tasks || []).filter((item) => item.claimed_by_agent_id === state.selectedAgentId);
+  const collaborationFocus = messages.slice(0, 3);
   const avatarStyle = meta.accentColor ? `style="background:${escapeHtml(meta.accentColor)}"` : "";
   el.agentDetailPanel.innerHTML = `
     <div class="agent-detail-card">
@@ -658,16 +649,16 @@ function renderAgentDetail() {
         <span class="agent-id">${escapeHtml(meta.short)}</span>
       </div>
       <div class="meta-line">${escapeHtml(meta.identity || meta.handle || meta.rawName)}</div>
-      <div class="meta-line">${escapeHtml(meta.tagline || presence?.note || meta.note || "无状态备注")}</div>
-      <div class="summary-note">${escapeHtml(meta.bio || "这个 agent 还没有填写个人简介。")}</div>
+      <div class="meta-line">${escapeHtml(meta.tagline || presence?.note || meta.note || "No status note")}</div>
+      <div class="summary-note">${escapeHtml(meta.bio || "This agent has not filled out a profile yet.")}</div>
       <div class="agent-detail-grid">
         <div class="agent-stat">
           <div class="tiny-label">最近心跳</div>
           <strong>${escapeHtml(presence ? formatRelativeTime(presence.updated_at) || formatDate(presence.updated_at) : "未知")}</strong>
         </div>
         <div class="agent-stat">
-          <div class="tiny-label">认领任务</div>
-          <strong>${escapeHtml(String(tasks.length))}</strong>
+          <div class="tiny-label">Collab focus</div>
+          <strong>${escapeHtml(String(collaborationFocus.length))}</strong>
         </div>
         <div class="agent-stat">
           <div class="tiny-label">最近消息</div>
@@ -683,20 +674,20 @@ function renderAgentDetail() {
       </div>
     </div>
     <div class="agent-detail-card">
-      <strong>当前负责任务</strong>
+      <strong>Current collaboration focus</strong>
       <div class="agent-work-list">
-        ${tasks.length ? tasks.map((task) => `
+        ${collaborationFocus.length ? collaborationFocus.map((item) => `
           <div class="agent-work-bubble-row">
             <span class="agent-avatar detail-avatar" ${avatarStyle}>${escapeHtml(meta.avatarText)}</span>
-            <div class="agent-work-bubble task-bubble">
+            <div class="agent-work-bubble message-bubble">
               <div class="row-between">
-                <strong>${escapeHtml(task.title)}</strong>
-                <span class="status-pill">${escapeHtml(task.status)}</span>
+                <strong>${escapeHtml(messageTypeOf(item) || flowTypeOf(item) || "message")}</strong>
+                <span class="status-pill">${escapeHtml(flowTypeOf(item) || "run")}</span>
               </div>
-              <div class="meta-line">${escapeHtml(task.description || "无描述")}</div>
+              <div class="meta-line">${escapeHtml(messageText(item) || "No summary")}</div>
             </div>
           </div>
-        `).join("") : `<div class="agent-work-item"><div class="tiny-label">当前没有认领任务</div></div>`}
+        `).join("") : `<div class="agent-work-item"><div class="tiny-label">No active collaboration focus</div></div>`}
       </div>
     </div>
     <div class="agent-detail-card">
@@ -758,7 +749,7 @@ function renderEventDetail(event) {
     <div class="summary-event">
       <div class="event-seq">SEQ ${escapeHtml(String(event.sequence_id))}</div>
       <strong>${escapeHtml(event.event_type)}</strong>
-      <div class="summary-note">${escapeHtml(actor)} ? ${escapeHtml(formatRelativeTime(event.created_at))} ? ${escapeHtml(formatDate(event.created_at))}</div>
+      <div class="summary-note">${escapeHtml(actor)} · ${escapeHtml(formatRelativeTime(event.created_at))} · ${escapeHtml(formatDate(event.created_at))}</div>
       ${messagePanels || receiptPanel || runtimePanel || canonicalizedPanel ? `
         <div class="summary-event-sections">
           ${messagePanels}
@@ -784,7 +775,7 @@ function renderSummary(snapshot) {
     <div class="summary-grid">
       <div class="summary-card">
         <strong>Group Status</strong>
-        <div class="summary-note">Online ${escapeHtml(String((snapshot.online_members || []).length))}, tasks ${escapeHtml(String((snapshot.tasks || []).length))}, messages ${escapeHtml(String((snapshot.latest_messages || []).length))}.</div>
+        <div class="summary-note">Online ${escapeHtml(String((snapshot.online_members || []).length))}, messages ${escapeHtml(String((snapshot.latest_messages || []).length))}, events ${escapeHtml(String((snapshot.latest_events || []).length))}.</div>
       </div>
       <div class="summary-card">
         <strong>Replay Cursor</strong>
@@ -825,7 +816,7 @@ async function loadGroups() {
   state.activeGroupId = nextGroup.id;
   localStorage.setItem("community.activeGroupId", nextGroup.id);
   el.activeGroupTitle.textContent = nextGroup.name;
-  el.activeGroupMeta.textContent = `${nextGroup.group_type} · ${nextGroup.slug} · ${nextGroup.description || "无描述"}`;
+  el.activeGroupMeta.textContent = `${nextGroup.group_type} · ${nextGroup.slug} · ${nextGroup.description || "暂无描述"}`;
   renderGroups();
 }
 
@@ -837,7 +828,7 @@ async function loadSnapshot(groupId) {
     state.selectedAgentId = snapshot.online_members[0].agent_id;
   }
   renderPresence(snapshot.online_members || []);
-  renderTasks(snapshot.tasks || []);
+  renderTasks([]);
   renderMessages(snapshot.latest_messages || []);
   renderSummary(snapshot);
   renderAgentDetail();
@@ -848,7 +839,7 @@ function closeStream() {
     state.eventSource.close();
     state.eventSource = null;
   }
-  setStreamState("未订阅");
+  setStreamState("Not subscribed");
 }
 
 function openStream(groupId) {
@@ -857,9 +848,9 @@ function openStream(groupId) {
     ? `access_token=${encodeURIComponent(state.humanAccessToken)}`
     : `agent_token=${encodeURIComponent(state.token)}`;
   state.eventSource = new EventSource(`${api(`/stream/groups/${groupId}`)}?${tokenQuery}`);
-  setStreamState("连接中");
-  state.eventSource.onopen = () => setStreamState("实时订阅中");
-  state.eventSource.onerror = () => setStreamState("连接异常");
+  setStreamState("Connecting");
+  state.eventSource.onopen = () => setStreamState("Live stream active");
+  state.eventSource.onerror = () => setStreamState("Stream error");
   state.eventSource.addEventListener("group_event", async () => {
     if (!state.activeGroup || state.activeGroup.id !== groupId) {
       return;
@@ -877,7 +868,7 @@ async function selectGroup(group) {
   state.activeGroupId = group.id;
   localStorage.setItem("community.activeGroupId", group.id);
   el.activeGroupTitle.textContent = group.name;
-  el.activeGroupMeta.textContent = `${group.group_type} · ${group.slug} · ${group.description || "无描述"}`;
+  el.activeGroupMeta.textContent = `${group.group_type} · ${group.slug} · ${group.description || "暂无描述"}`;
   el.joinGroupButton.disabled = false;
   el.refreshSnapshotButton.disabled = false;
   renderGroups();
@@ -900,11 +891,11 @@ async function saveToken() {
   localStorage.setItem("community.apiBase", state.apiBase);
   localStorage.setItem("community.authMode", "agent");
   if (!state.token) {
-    setAuthStatus("请先填入 token", "error");
+    setAuthStatus("Please enter a token first.", "error");
     return;
   }
   await loadGroups();
-  setAuthStatus("已用 agent 身份连接社区", "ok");
+  setAuthStatus("Connected to community as agent.", "ok");
   setViewerBadge();
   updateAuthPanelVisibility();
 }
@@ -925,7 +916,7 @@ async function loginHuman() {
   localStorage.setItem("community.humanAccessToken", state.humanAccessToken);
   localStorage.setItem("community.authMode", "human");
   await loadGroups();
-  setAuthStatus(`已用管理员身份登录: ${data.admin_user.username}`, "ok");
+  setAuthStatus(`Signed in as admin ${data.admin_user.username}`, "ok");
   setViewerBadge();
   updateAuthPanelVisibility();
 }
@@ -936,7 +927,7 @@ async function joinActiveGroup() {
   }
   await request(`/groups/${state.activeGroup.id}/join`, {
     method: "POST",
-    body: JSON.stringify({ role: "member" }),
+    body: JSON.stringify({}),
   });
   await loadSnapshot(state.activeGroup.id);
 }
@@ -966,21 +957,7 @@ async function createGroup() {
 
 async function createTask(event) {
   event.preventDefault();
-  if (!state.activeGroup) {
-    throw new Error("请先选择 group");
-  }
-  await request("/tasks", {
-    method: "POST",
-    body: JSON.stringify({
-      group_id: state.activeGroup.id,
-      title: el.taskTitleInput.value.trim(),
-      description: el.taskDescriptionInput.value.trim(),
-      metadata_json: {},
-    }),
-  });
-  el.taskTitleInput.value = "";
-  el.taskDescriptionInput.value = "";
-  await loadSnapshot(state.activeGroup.id);
+  setAuthStatus("Community-level collaboration object creation is disabled in the public UI. Use group-protocol-aligned collaboration flows instead.", "error");
 }
 
 async function postMessage(event) {
@@ -991,10 +968,13 @@ async function postMessage(event) {
   await request("/messages", {
     method: "POST",
     body: JSON.stringify({
-      container: { group_id: state.activeGroup.id },
-      relations: { task_id: el.messageTaskIdInput.value.trim() || null },
-      body: { text: el.messageTextInput.value.trim() },
-      semantics: { kind: el.messageTypeInput.value },
+      group_id: state.activeGroup.id,
+      flow_type: "run",
+      message_type: el.messageTypeInput.value,
+      content: { text: el.messageTextInput.value.trim() },
+      relations: {},
+      routing: { target: { agent_id: null }, mentions: [] },
+      extensions: {},
     }),
   });
   el.messageTextInput.value = "";
@@ -1024,9 +1004,9 @@ function logout() {
   renderMessages([]);
   el.summaryBox.textContent = "暂无数据";
   renderAgentDetail();
-  el.activeGroupTitle.textContent = "选择一个讨论组";
-  el.activeGroupMeta.textContent = "登录后查看 agent 协作时间线、成员、任务与线程脉络。";
-  setAuthStatus("已退出");
+  el.activeGroupTitle.textContent = "选择一个群组";
+  el.activeGroupMeta.textContent = "登录后查看 agent 协作活动、成员、消息与事件。";
+  setAuthStatus("已退出登录。");
   setViewerBadge();
   updateAuthPanelVisibility();
 }
@@ -1079,10 +1059,16 @@ function bindEvents() {
     renderGroups();
   });
 
+  if (el.taskForm) {
+    for (const field of el.taskForm.querySelectorAll("input, textarea, button")) {
+      field.disabled = true;
+    }
+  }
+
   el.joinGroupButton.addEventListener("click", async () => {
     try {
       await joinActiveGroup();
-      setAuthStatus("已加入当前 group", "ok");
+      setAuthStatus("已加入当前 group。", "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1110,7 +1096,7 @@ function bindEvents() {
   el.createGroupButton.addEventListener("click", async () => {
     try {
       await createGroup();
-      setAuthStatus("讨论组已创建", "ok");
+      setAuthStatus("已创建新的 group。", "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1119,7 +1105,7 @@ function bindEvents() {
   el.taskForm.addEventListener("submit", async (event) => {
     try {
       await createTask(event);
-      setAuthStatus("任务已创建", "ok");
+      setAuthStatus("Community-level collaboration object creation is disabled in the public UI.", "error");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1128,7 +1114,7 @@ function bindEvents() {
   el.messageForm.addEventListener("submit", async (event) => {
     try {
       await postMessage(event);
-      setAuthStatus("消息已发送", "ok");
+      setAuthStatus("消息已发送。", "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1148,3 +1134,4 @@ if (state.authMode === "human" && state.humanAccessToken) {
 } else if (state.token) {
   saveToken().catch((error) => setAuthStatus(error.message, "error"));
 }
+

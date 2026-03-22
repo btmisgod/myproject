@@ -20,9 +20,9 @@ from app.services.protocol_validator import build_validation_request, validate_p
 
 
 # Community Message Bus pre-route hook for protocol validation.
-# This hook performs lightweight protocol checks before routing. It does not
-# execute complex rule logic in this phase; it only standardizes the integration
-# path between Message Bus and the protocol validator.
+# This hook performs lightweight group-scoped protocol checks before routing.
+# It does not execute complex rule logic in this phase; it only standardizes
+# the integration path between Message Bus and the protocol validator.
 
 
 logger = logging.getLogger(__name__)
@@ -42,38 +42,50 @@ def _action_type_from_envelope(envelope: MessageEnvelope) -> str:
 
 def _context_from_envelope(envelope: MessageEnvelope) -> dict[str, Any]:
     payload = envelope.payload if isinstance(envelope.payload, dict) else {}
+    routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+    target = routing.get("target") if isinstance(routing.get("target"), dict) else {}
     payload_metadata = payload.get("metadata")
     message_metadata = payload_metadata if isinstance(payload_metadata, dict) else {}
+    payload_mentions = routing.get("mentions") if isinstance(routing.get("mentions"), list) else []
+    context_mentions = [
+        {
+            "mention_type": item.mention_type,
+            "mention_id": item.mention_id,
+            "display_text": item.display_text,
+        }
+        for item in envelope.mentions
+    ]
+    if not context_mentions and payload_mentions:
+        context_mentions = [
+            item
+            for item in payload_mentions
+            if isinstance(item, dict)
+        ]
     return {
         "category": envelope.category,
         "event_type": envelope.event_type,
+        "group_id": envelope.channel_id,
         "channel_id": envelope.channel_id,
         "thread_id": envelope.thread_id,
         "correlation_id": envelope.correlation_id,
         "message_type": payload.get("message_type"),
         "flow_type": payload.get("flow_type"),
-        "intent": payload.get("intent"),
+        "intent": payload.get("intent") or message_metadata.get("intent"),
         "target_scope": envelope.target.target_scope if envelope.target else None,
         "target_agent_id": (
             envelope.target.target_agent_id if envelope.target and envelope.target.target_agent_id else None
         )
+        or target.get("agent_id")
         or message_metadata.get("target_agent_id"),
-        "target_agent": message_metadata.get("target_agent"),
+        "target_agent": target.get("agent_label") or message_metadata.get("target_agent"),
         "assignees": message_metadata.get("assignees"),
         "message_metadata": message_metadata,
         "directed_collaboration": message_metadata.get("directed_collaboration"),
-        "mentions": [
-            {
-                "mention_type": item.mention_type,
-                "mention_id": item.mention_id,
-                "display_text": item.display_text,
-            }
-            for item in envelope.mentions
-        ],
+        "mentions": context_mentions,
     }
 
 
-async def _load_channel_protocol_context(group_id: str) -> dict[str, Any]:
+async def _load_group_protocol_context(group_id: str) -> dict[str, Any]:
     try:
         parsed_group_id = uuid.UUID(str(group_id))
     except Exception:
@@ -108,12 +120,17 @@ async def _load_channel_protocol_context(group_id: str) -> dict[str, Any]:
         )
         channel = channel_protocol.get("channel") if isinstance(channel_protocol.get("channel"), dict) else {}
         return {
-            "channel_group_slug": group.slug,
-            "channel_type": channel.get("channel_type"),
-            "channel_directed_collaboration": directed,
-            "channel_public_result_exception": public_result_exception,
-            "channel_explicit_target_rule": explicit_target_rule,
+            "group_slug": group.slug,
+            "group_type": channel.get("channel_type"),
+            "group_directed_collaboration": directed,
+            "group_public_result_exception": public_result_exception,
+            "group_explicit_target_rule": explicit_target_rule,
         }
+
+
+async def _load_channel_protocol_context(group_id: str) -> dict[str, Any]:
+    # Legacy compatibility alias. Prefer _load_group_protocol_context().
+    return await _load_group_protocol_context(group_id)
 
 
 def _build_protocol_violation_payload(
@@ -347,7 +364,7 @@ class ProtocolValidationHook:
 
     async def validate(self, envelope: MessageEnvelope) -> ProtocolValidationResult:
         context = _context_from_envelope(envelope)
-        context.update(await _load_channel_protocol_context(envelope.channel_id))
+        context.update(await _load_group_protocol_context(envelope.channel_id))
         request = build_validation_request(
             action_type=_action_type_from_envelope(envelope),
             actor_id=envelope.source_agent or "community_system",
@@ -364,6 +381,6 @@ def _result_metadata(result: ProtocolValidationResult) -> dict[str, Any]:
         "reason": result.reason,
         "suggestion": result.suggestion,
         "issue_codes": [issue.code for issue in result.issues],
-        "suggested_channel_id": result.suggested_channel_id,
+        "suggested_group_id": result.suggested_group_id,
         "metadata": result.metadata,
     }

@@ -9,6 +9,8 @@ from app.schemas.common import ORMModel
 
 
 class TaskCreate(BaseModel):
+    # Internal request shape for the current group-scoped collaboration object
+    # helper. This schema is not a community-level public task model contract.
     group_id: uuid.UUID
     title: str = Field(min_length=3, max_length=200)
     description: str | None = Field(default=None, max_length=1000)
@@ -17,6 +19,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskRead(ORMModel):
+    # Compatibility read model for persisted group-scoped collaboration objects.
     id: uuid.UUID
     group_id: uuid.UUID
     title: str

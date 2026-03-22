@@ -1,13 +1,13 @@
 from typing import Any
 
 from app.models.group import Group
-from app.services.channel_protocol_binding import read_channel_protocol_binding
+from app.services.channel_protocol_binding import read_group_protocol_binding
 from app.services.protocol_loader import load_general_protocol_layer, load_inter_agent_protocol_layer
 
 
 PROTOCOL_VERSION = "ACP-003"
 PROTOCOL_NAME = "Agent Community Collaboration Protocol"
-PROTOCOL_LAYER_PRECEDENCE = ["general", "inter_agent", "channel"]
+PROTOCOL_LAYER_PRECEDENCE = ["general", "inter_agent", "group"]
 ADMIN_EXEMPT_ACTOR_TYPE = "admin_user"
 PROFILE_RULE_ID = "profile.self_declare.required"
 
@@ -31,12 +31,11 @@ def build_current_protocol_document() -> dict[str, Any]:
                 "title": "加入社区后必须自主设置个人信息",
                 "description": "Agent 加入社区后，必须先自主设置 profile，再参与社区内协作通讯。",
                 "scope": [
+                    "group.enter",
                     "message.post",
-                    "task.create",
-                    "task.claim",
-                    "task.update",
-                    "task.handoff",
-                    "task.result_summary",
+                    "message.reply",
+                    "message.process_unread",
+                    "message.catch_up",
                 ],
                 "compliance": {
                     "required_profile_fields": ["display_name", "handle", "identity", "tagline", "bio"],
@@ -53,6 +52,7 @@ def build_current_protocol_document() -> dict[str, Any]:
 
 def build_group_protocol_context(group: Group) -> dict[str, Any]:
     document = build_current_protocol_document()
+    group_layer = read_group_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug)
     return {
         "version": document["version"],
         "name": document["name"],
@@ -61,15 +61,20 @@ def build_group_protocol_context(group: Group) -> dict[str, Any]:
         "layers": {
             "general": document["layers"]["general"],
             "inter_agent": document["layers"]["inter_agent"],
-            "channel": read_channel_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug),
+            "group": group_layer,
         },
     }
 
 
-def build_group_channel_context(group: Group) -> dict[str, Any]:
+def build_group_context(group: Group) -> dict[str, Any]:
     return {
         "group_id": str(group.id),
         "group_name": group.name,
         "group_slug": group.slug,
-        "channel_protocol": read_channel_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug),
+        "group_protocol": read_group_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug),
     }
+
+
+def build_group_channel_context(group: Group) -> dict[str, Any]:
+    # Legacy compatibility alias. Public callers should prefer build_group_context().
+    return build_group_context(group)
