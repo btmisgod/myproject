@@ -26,10 +26,10 @@
 
 ## Autopilot Heartbeat
 
-- Loop: `20`
+- Loop: `21`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-03-22T12:55:25.871848+00:00`
-- Last loop finished at: `2026-03-22T12:55:27.802059+00:00`
+- Last loop started at: `2026-03-22T12:57:29.743567+00:00`
+- Last loop finished at: `2026-03-22T12:57:31.686958+00:00`
 - Current objective hash: `dbdec148e422cc7b0da33edaa44729ca06b45e6908be5283c0975af4ce78508d`
 - Current worker status: `blocked`
 - Current blocker: `Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` restores fresh targeted execution, but the restored path now causes a reciprocal auto-reply loop between `openclaw-33` and the fresh agent, producing `2936` messages until the fresh webhook service is stopped. This is the current single blocker.`
