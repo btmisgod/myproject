@@ -8,7 +8,7 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
   - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `431cdddf0296da9aeec62ac675dce44c93411e71`
+  - `myproject`: `06c54f8b8ef044341dfa22233347c1da5af4b170`
   - `community-skill`: `71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285`
 - Service names:
   - `agent-community-api-1`
@@ -26,16 +26,22 @@
 
 ## Autopilot Heartbeat
 
-- Loop: `5`
+- Loop: `6`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-03-22T12:22:02.284980+00:00`
-- Last loop finished at: `2026-03-22T12:22:05.723756+00:00`
+- Last loop started at: `2026-03-22T12:24:47+00:00`
+- Last loop finished at: `2026-03-22T12:24:47+00:00`
 - Current objective hash: `1e7f7d474c0cba7ff7d132378c88d3ec75531c991a4f18d040ec76342f8a9541`
 - Current worker status: `blocked`
 - Current blocker: `Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` restores fresh targeted execution, but the restored path now causes a reciprocal auto-reply loop between `openclaw-33` and the fresh agent, producing `2936` messages until the fresh webhook service is stopped. This is the current single blocker.`
 - Codex objective step ran this loop: `false`
 ## Work Performed
 
+- Re-read the required control-plane docs and current design-log handoff doc for the active objective boundary
+- Read `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json`
+- Verified `docs/control-plane/CONTROL.md` hash is unchanged at `dbdec148e422cc7b0da33edaa44729ca06b45e6908be5283c0975af4ce78508d`
+- Verified `docs/control-plane/ARCHITECT_REVIEW.md` hash is unchanged at `7dd495252ae7186cedc56037d26e276418303e7cb255ed48848f64de6b829a39`
+- Confirmed the active objective remains blocked by the existing reciprocal auto-reply loop, so no new execution branch was started this loop
+- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` for a blocked waiting loop
 - Pulled latest `myproject main` to `db2c0f25a24525a325277517dcbe1ebb2426492b`
 - Read control-plane docs:
   - `docs/control-plane/REPO_INDEX.md`
@@ -72,6 +78,18 @@
 ## Validation
 
 - Commands:
+  - `sed -n '1,220p' docs/control-plane/REPO_INDEX.md`
+  - `sed -n '1,260p' docs/control-plane/CONTROL.md`
+  - `sed -n '1,260p' docs/control-plane/OPERATING_RULES.md`
+  - `sed -n '1,260p' docs/control-plane/SERVER_REPORT.md`
+  - `sed -n '1,240p' docs/control-plane/.runtime/worker-state.json`
+  - `sed -n '1,260p' docs/designlog/'Agent Community 当前对话架构结论交接文档.txt'`
+  - `git status --short --branch`
+  - `sha256sum docs/control-plane/CONTROL.md docs/control-plane/ARCHITECT_REVIEW.md docs/control-plane/SERVER_REPORT.md`
+  - `date -u -Iseconds`
+  - `git rev-parse HEAD`
+  - `git -C /root/openclaw-33/workspace/skills/community-skill rev-parse HEAD`
+  - `git -C /root/openclaw-33/workspace/skills/community-skill status --short --branch`
   - `git fetch origin main`
   - `git reset --hard db2c0f25a24525a325277517dcbe1ebb2426492b`
   - `python3 scripts/control_plane_snapshot.py --status running --result investigating_fresh_targeted_runtime_boundary`
@@ -88,6 +106,8 @@
   - `journalctl -u openclaw-community-webhook-openclaw-fresh-main-0322.service --since '2026-03-22 19:52:00' --no-pager`
   - `systemctl stop openclaw-community-webhook-openclaw-fresh-main-0322.service`
 - Result:
+  - Control-plane hash check: passed; `CONTROL.md` and `ARCHITECT_REVIEW.md` are unchanged from the stored worker state
+  - Active-objective continuation: blocked; the existing reciprocal auto-reply loop remains the single blocker, so no new branch was started
   - Fresh onboarding: passed on current skill local `main`
   - Fresh runtime installation: passed
   - Fresh targeted intake: passed
@@ -119,6 +139,10 @@
   - loop volume after targeted validation: `2936` messages in the same group/thread window
   - alternating recent rows show both `552899b3-c3d0-4ade-9925-117d812f10f7` and `04e13c3c-c405-4ff8-8f1e-f6f69acbabc2` replying automatically
   - to stop further growth, `openclaw-community-webhook-openclaw-fresh-main-0322.service` was stopped at `2026-03-22 19:56:54 CST`
+- Control-plane state is unchanged this loop:
+  - `CONTROL.md` sha256: `dbdec148e422cc7b0da33edaa44729ca06b45e6908be5283c0975af4ce78508d`
+  - `ARCHITECT_REVIEW.md` sha256: `7dd495252ae7186cedc56037d26e276418303e7cb255ed48848f64de6b829a39`
+  - local worker state before refresh still pointed to the same single blocker text
 
 ## Current Status
 
@@ -136,4 +160,4 @@ Current `community-skill` local `main@71a3d1e3131eee9cd3d1260cb9df4aeaff3b1285` 
 
 ## Recommendation
 
-Next step: tighten the targeted reply boundary so the fresh agent replies once to the original targeted message but does not auto-reply to follow-up replies from another agent in the same thread.
+Next step only after control-plane changes or explicit unblock direction: keep the worker alive on the same active objective and preserve the current single blocker without opening a second branch.
