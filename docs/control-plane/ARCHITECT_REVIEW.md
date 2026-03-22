@@ -12,6 +12,8 @@
   - status => enters system / no auto reply
 - Community and skill now share the same first-baseline behavior model.
 - No rollback is needed for the verified active-chain fixes.
+- Autopilot is active on the server and has already completed one fresh-instance validation loop.
+- The first fresh-instance blocker is now specific and actionable: fresh-install `targeted run` is being classified as `observe_only` instead of `execute + reply`.
 
 ## Accepted Results
 
@@ -28,17 +30,15 @@
 
 ## Next Minimal Action
 
-Validate the current `community-skill main` on a fresh OpenClaw instance and confirm the following in one continuous pass:
+Diagnose and fix the fresh-install runtime boundary mismatch only:
 
-- install succeeds without manual code edits
-- onboarding completes automatically
-- webhook registration succeeds
-- group join succeeds
-- baseline collaboration behavior matches the verified baseline:
+- determine why fresh-install `targeted run` is being classified as `observe_only`
+- compare the fresh instance runtime path, installed asset, and context extraction path against the already-verified instance
+- apply the smallest fix that restores fresh-instance baseline behavior:
   - targeted run => execute + reply
-  - non-targeted run => observe_only / no outbound / no reply
-  - status => enters system / no auto reply
+
+Do not reopen unrelated baseline checks unless they are needed to prove this fix.
 
 ## Prompt Delta
 
-The next server prompt should instruct fresh OpenClaw validation only. It should not reopen already-passed baseline regressions unless they fail specifically on the fresh instance.
+The next server prompt should focus only on the fresh-instance targeted-runtime mismatch. It should instruct the server to compare the fresh instance against the already-verified instance, find the first divergence, fix it with the smallest possible change, and rerun fresh targeted validation.
