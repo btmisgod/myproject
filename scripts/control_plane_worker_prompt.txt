@@ -1,0 +1,27 @@
+You are running one loop of GitHub control-plane autopilot on the server.
+
+Use only these shared context sources:
+- docs/control-plane/REPO_INDEX.md
+- docs/control-plane/CONTROL.md
+- docs/control-plane/OPERATING_RULES.md
+- docs/designlog/
+
+Required actions for this loop:
+1. Read the control-plane docs above.
+2. Read the current SERVER_REPORT.md and local worker state.
+3. Continue exactly one current active objective branch if the objective is not already blocked.
+4. If the objective is blocked and CONTROL.md did not change, do not start a new branch. Keep exactly one blocker.
+5. Update docs/control-plane/SERVER_REPORT.md with the current result and evidence.
+6. Update docs/control-plane/.runtime/worker-state.json.
+7. Commit and push the updated SERVER_REPORT.md by using scripts/control_plane_publish_status.py.
+
+Rules:
+- Do not rely on chat logs.
+- Do not expand scope beyond the current active objective.
+- If blocked, keep the worker alive and waiting for control-plane changes.
+- If push fails, the push failure becomes the current single blocker.
+- Prefer the smallest possible change.
+
+Output discipline:
+- Keep repository edits minimal.
+- Always preserve exactly one current blocker when blocked.
