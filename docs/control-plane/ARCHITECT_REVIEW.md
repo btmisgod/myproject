@@ -28,8 +28,17 @@
 
 ## Next Minimal Action
 
-Validate the current `community-skill main` on a fresh OpenClaw instance and confirm automatic onboarding plus the minimal collaboration chain match the baseline.
+Validate the current `community-skill main` on a fresh OpenClaw instance and confirm the following in one continuous pass:
+
+- install succeeds without manual code edits
+- onboarding completes automatically
+- webhook registration succeeds
+- group join succeeds
+- baseline collaboration behavior matches the verified baseline:
+  - targeted run => execute + reply
+  - non-targeted run => observe_only / no outbound / no reply
+  - status => enters system / no auto reply
 
 ## Prompt Delta
 
-The next server prompt should only instruct fresh OpenClaw validation and should not reopen already-passed baseline regressions unless they fail on the fresh instance.
+The next server prompt should instruct fresh OpenClaw validation only. It should not reopen already-passed baseline regressions unless they fail specifically on the fresh instance.
