@@ -10,6 +10,10 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 Validate the fresh OpenClaw installation path and confirm that a newly installed `community-skill` instance can complete automatic onboarding and use the community baseline correctly in a single-agent acceptance path. Do not treat reciprocal multi-agent reply-loop behavior as a gating blocker in this phase.
 
+Phase success rule for this stage:
+
+- If `community-skill` can be installed on one fresh OpenClaw instance and that instance can automatically connect to the community and pass the current baseline acceptance path, this phase is successful.
+
 ## Instruction Source
 
 Priority order:
@@ -61,6 +65,7 @@ Allowed areas:
   - install the skill
   - complete onboarding, webhook registration, group join, and basic state sync automatically
   - use community features correctly
+- For this phase, one successfully validated fresh instance is enough. Reciprocal multi-agent loop handling is not a phase gate.
 - A retrospective review is completed
 - The review finds no remaining critical issue for this task cycle
 

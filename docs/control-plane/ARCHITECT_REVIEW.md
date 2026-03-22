@@ -15,6 +15,7 @@
 - Autopilot is active on the server and has already completed one fresh-instance validation loop.
 - The fresh-install `targeted run` mismatch has been cleared on the server side.
 - The reciprocal auto-reply loop is a later-stage collaboration-boundary issue, not the current phase gate.
+- The current phase is successful once one fresh OpenClaw instance can install `community-skill`, connect automatically, and pass the current baseline acceptance path.
 
 ## Accepted Results
 
@@ -43,6 +44,7 @@ Return to the current phase boundary and validate fresh-install acceptance witho
   - remain correct on non-targeted and status baseline handling
 - perform this acceptance in a way that does not require solving the reciprocal two-agent reply loop yet
 - treat the reciprocal loop as a documented later-stage issue unless it blocks single-agent fresh-install acceptance directly
+- once one fresh instance passes that acceptance path, mark the phase as successful and move to retrospective review prep
 
 Do not open a new branch around multi-agent loop repair in this phase.
 
