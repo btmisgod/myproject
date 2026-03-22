@@ -32,6 +32,8 @@ Recommended loop:
 7. publish the updated `SERVER_REPORT.md` to GitHub
 8. sleep until next poll window
 
+Blocked state must not become a permanent no-op. If the active objective is still blocked and control-plane docs have not changed, the worker should still retry the same objective on a bounded cadence instead of waiting forever for a doc edit.
+
 ## Local Worker State
 
 The worker should keep a local file:
@@ -49,6 +51,7 @@ Suggested fields:
 - `last_loop_finished_at`
 - `last_result`
 - `current_blocker`
+- `last_codex_run_at`
 
 This file is operational metadata only. It does not override control-plane docs.
 
@@ -74,6 +77,7 @@ If push fails, the worker should:
 ## Polling
 
 - Default cadence: every 2 minutes
+- Recommended blocked-objective retry cadence: every poll window unless a heavier local policy overrides it
 - If a heavy task is already running, do not interrupt it
 - Refresh at the next safe checkpoint
 

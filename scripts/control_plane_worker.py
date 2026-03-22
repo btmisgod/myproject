@@ -26,6 +26,7 @@ PROMPT_PATH = ROOT / "scripts" / "control_plane_worker_prompt.txt"
 LOCK_PATH = RUNTIME_DIR / "worker.lock"
 
 POLL_SECONDS = int(os.environ.get("CONTROL_PLANE_POLL_SECONDS", "120"))
+BLOCKED_RETRY_SECONDS = int(os.environ.get("CONTROL_PLANE_BLOCKED_RETRY_SECONDS", str(POLL_SECONDS)))
 CODEX_BIN = os.environ.get("CONTROL_PLANE_CODEX_BIN", "codex")
 MODEL = os.environ.get("CONTROL_PLANE_MODEL", "")
 RUN_ONCE = os.environ.get("CONTROL_PLANE_RUN_ONCE", "0") == "1"
@@ -33,6 +34,16 @@ RUN_ONCE = os.environ.get("CONTROL_PLANE_RUN_ONCE", "0") == "1"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def parse_iso8601(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def file_hash(path: Path) -> str:
@@ -104,6 +115,7 @@ def write_worker_state(
     loop_finished_at: str | None,
     last_result: str,
     current_blocker: str,
+    last_codex_run_at: str | None = None,
 ) -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     state = {
@@ -116,6 +128,7 @@ def write_worker_state(
         "last_loop_finished_at": loop_finished_at,
         "last_result": last_result,
         "current_blocker": current_blocker,
+        "last_codex_run_at": last_codex_run_at,
         "last_snapshot_at": utc_now(),
     }
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
@@ -217,8 +230,15 @@ def loop_once(loop_number: int) -> None:
     previous_control_hash = str(previous_state.get("control_hash", ""))
     previous_architect_hash = str(previous_state.get("architect_review_hash", ""))
     previous_status = str(previous_state.get("status", ""))
+    previous_last_codex_run_at = parse_iso8601(previous_state.get("last_codex_run_at"))
     objective_changed = previous_control_hash != current_control_hash
     architect_changed = previous_architect_hash != current_architect_hash
+    blocked_retry_due = False
+    if previous_status == "blocked":
+        if previous_last_codex_run_at is None:
+            blocked_retry_due = True
+        else:
+            blocked_retry_due = (datetime.now(timezone.utc) - previous_last_codex_run_at).total_seconds() >= BLOCKED_RETRY_SECONDS
 
     write_worker_state(
         status="running",
@@ -230,13 +250,16 @@ def loop_once(loop_number: int) -> None:
         loop_finished_at=None,
         last_result="loop_running",
         current_blocker=blocker,
+        last_codex_run_at=previous_state.get("last_codex_run_at"),
     )
 
     codex_ran = False
     codex_ok = True
     codex_output = ""
-    if previous_status != "blocked" or objective_changed or architect_changed:
+    last_codex_run_at = previous_state.get("last_codex_run_at")
+    if previous_status != "blocked" or objective_changed or architect_changed or blocked_retry_due:
         codex_ran = True
+        last_codex_run_at = utc_now()
         codex_ok, codex_output = run_codex_loop()
         log("codex_exec_completed", loop=loop_number, ok=codex_ok)
         report_text = REPORT_PATH.read_text(encoding="utf-8")
@@ -269,6 +292,7 @@ def loop_once(loop_number: int) -> None:
         loop_finished_at=loop_finished_at,
         last_result=final_result if codex_ok else "codex_exec_failed",
         current_blocker=blocker,
+        last_codex_run_at=last_codex_run_at,
     )
 
     publish_ok, publish_output = publish_report(f"worker loop {loop_number}")
@@ -286,6 +310,7 @@ def loop_once(loop_number: int) -> None:
             loop_finished_at=utc_now(),
             last_result="blocked_on_report_push_failure",
             current_blocker=f"SERVER_REPORT.md push failed: {publish_output or 'git push failed'}",
+            last_codex_run_at=last_codex_run_at,
         )
         log("publish_failed", loop=loop_number, output=publish_output)
     else:
@@ -316,6 +341,7 @@ def main() -> int:
                     loop_finished_at=utc_now(),
                     last_result="loop_exception",
                     current_blocker=str(exc),
+                    last_codex_run_at=load_state().get("last_codex_run_at"),
                 )
             if RUN_ONCE:
                 break

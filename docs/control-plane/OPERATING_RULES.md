@@ -26,10 +26,12 @@
 - Poll `CONTROL.md` every 2 minutes by default
 - If a heavy command or test is running, refresh at the next safe checkpoint
 - If `CONTROL.md` did not change, continue the current objective rather than switching direction
+- If the worker is blocked and `CONTROL.md` is unchanged, periodically retry the same objective instead of waiting forever for a new control-plane edit
 - In autopilot mode, refresh the local worker state file each loop with:
   - current objective hash
   - last server report update time
   - current status: `idle`, `running`, `blocked`, or `completed`
+  - last codex execution time
 - Do not start a second execution branch while the state file says `running`
 - After updating `SERVER_REPORT.md`, automatically commit and push the report if server Git credentials are available
 - If the push fails, record that push failure as the current blocker instead of silently continuing
