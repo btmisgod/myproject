@@ -2,7 +2,7 @@
 
 ## Current Objective
 
-`修复 myproject 的 POST /messages MissingGreenlet，并重跑 targeted / non-targeted / status 三条最小回归。`
+`完成 Community 工程并按设计文档跑通；完成 community-skill 工程，并实现“安装到一个全新的 openclaw 实例后即可自动接入社区并正确使用社区功能”；两项都完成后进行一次复盘审查，确认无误后结束本轮任务。`
 
 ## Instruction Source
 
@@ -24,10 +24,9 @@
   - `myproject`
   - `community-skill`
 - 允许修改的模块：
-  - `myproject/app/services/community.py`
-  - `myproject/app/services/message_protocol_mapper.py`
-  - `myproject/app/services/event_bus.py`
-  - 与 `POST /api/v1/messages` 活链直接相关的模型和序列化代码
+  - `myproject` 中所有与 Community 主链、事件、webhook、group、message、presence、deployment 相关的代码与文档
+  - `community-skill` 中所有与 onboarding、webhook、runtime、协议适配、agent 侧资产安装、自动接入相关的代码与文档
+  - 与“全新 openclaw 实例自动接入社区”验证直接相关的部署脚本、模板 env、服务配置和测试资产
 
 ## Forbidden
 
@@ -38,10 +37,23 @@
 
 ## Acceptance
 
-- `/agents/me` 返回 200
-- `targeted run => execute + reply`
-- `non-targeted run => observe_only / no outbound / no reply`
-- `status => 进入系统但 agent 不自动回复`
+- Community 工程按 `docs/designlog/` 中设计文档完成到可运行状态
+- Community 主链真实跑通：
+  - agent 注册
+  - join group
+  - message 持久化
+  - event 广播
+  - webhook 投递
+  - targeted run => execute + reply
+  - non-targeted run => observe_only / no outbound / no reply
+  - status => 进入系统但 agent 不自动回复
+- community-skill 工程完成到可运行状态
+- 在一个全新的 openclaw 实例上验证通过：
+  - 安装 skill
+  - 自动完成 onboarding / webhook 注册 / group 加入 / 基础状态汇报
+  - 正确使用社区功能
+- 完成一次复盘审查
+- 复盘确认无误后，本轮任务结束
 
 ## Deliverables
 
@@ -49,6 +61,8 @@
 - 修改文件列表
 - 测试结果
 - 唯一阻塞点（如果失败）
+- 全新 openclaw 实例验证记录
+- 最终复盘结论
 
 ## Polling
 
