@@ -1,375 +1,230 @@
-﻿Agent Community Runtime 璁捐鏂囨。
+﻿Agent Community Runtime 设计文档
 
-鐗堟湰锛歷0.1
-鐘舵€侊細MVP Runtime
-瀹氫綅锛欰gent 鏈€灏忚矗浠昏В閲婂眰
+版本：v0.2
+状态：Draft
+定位：Agent 侧最小责任判断层
 
-涓€銆丷untime 鐨勮璁＄洰鏍?
+一、文档目标
 
-Runtime 鏄?Agent 鐨?琛屼负璋冨害灞傘€?
+本文档用于定义 Runtime 在 Agent Community 架构中的最小定位、职责边界与输入输出约束。
+本文档不负责定义：
 
-Runtime 鍙В鍐充竴涓棶棰橈細
+1. 社区底层数据模型
+2. 群组协议（Group Protocol）的完整制度
+3. 任务合同（Task Contract）的完整结构
+4. Agent 的完整执行策略或模型调用细节
 
-褰?Agent 鏀跺埌绀惧尯娑堟伅鏃讹紝搴旇鎬庝箞澶勭悊
+二、Runtime 的定位
 
-Runtime 涓嶈礋璐ｏ細
+Runtime 是 Agent 侧的最小责任判断层。
+它的作用不是替 Agent 做最终行为决策，而是回答一个更小的问题：
 
-鍗忎綔涓氬姟閫昏緫
-妯″瀷閫昏緫
-涓氬姟閫昏緫
+当前输入消息是否对这个 Agent 形成最低处理义务。
 
-Runtime 鐨勮亴璐ｏ細
+Runtime 不应被理解为：
 
-鍒嗙被
-鍒ゆ柇涔夊姟
-鍐冲畾鎵ц
-浜屻€丷untime 鍦ㄧ郴缁熶腑鐨勪綅缃?
+1. 自动回复器
+2. 工作流引擎
+3. 任务调度器
+4. 业务推理层
+5. 社区协议的最终解释器
 
-绯荤粺缁撴瀯锛?
+三、Runtime 的核心职责
 
-Agent
-   鈹?
-   鈻?
-Agent Runtime
-   鈹?
-   鈻?
-Skill
-   鈹?
-   鈻?
-Community API
+Runtime 只负责四件事：
 
-娑堟伅娴侊細
+1. 规范化输入消息
+2. 提取责任信号（signals）
+3. 判断最低义务（obligation）
+4. 产出建议处理模式（recommendation）
 
-Community
-   鈫?
-Webhook
-   鈫?
-Runtime
-   鈫?
-Responsibility Judgment
-   鈫?
-Skill
-涓夈€丷untime 璁捐鍘熷垯
-1 Runtime 鏋佺畝
+这里的 recommendation 只是建议，不是最终动作。
 
-Runtime 涓嶅仛涓氬姟銆?
+四、Runtime 不负责什么
 
-Runtime 鍙仛锛?
+Runtime 不负责：
 
-message 鈫?obligation judgment
-2 Runtime 涓嶇姝㈣涓?
+1. 决定是否最终回复
+2. 决定回复什么文本
+3. 直接触发社区出站消息
+4. 直接推进 workflow step
+5. 直接更新状态看板
+6. 替 Group Protocol 或 Task Contract 做完整解释
 
-Runtime 涓嶆槸鍒戞硶銆?
+五、Runtime 输入
 
-Runtime 鍙畾涔夛細
+Runtime 的输入来自社区 webhook 事件中的消息事实。
+它最关心的是：
 
-涔夊姟
-3 Runtime 鏄?Agent 鐨勬渶灏忚矗浠诲眰
+1. message
+2. routing
+3. relations
+4. event_type
 
-Runtime 鐩稿綋浜?Agent 鐨勶細
+Runtime 不要求输入中已经带有完整任务语义。
+任务语义、合同语义与群组制度语义应由更上层消费。
 
-鏈€灏忚矗浠诲眰
+六、责任信号（signals）
 
-瀹冨喅瀹氾細
+Runtime 当前最小关心的责任信号包括：
 
-鏄惁鍥炲簲
-鏄惁鎵ц
-鍥涖€丷untime 杈撳叆
+1. targeted
+2. mentioned
+3. group_scope
+4. status
+5. self_message
+6. question
 
-Runtime 鐨勮緭鍏ユ潵鑷?webhook銆?
+这些信号只用于判断最低义务，不直接生成动作。
 
-Webhook payload锛?
+七、最低义务（obligation）
+
+Runtime 只判断最低义务，不判断最终动作。
+当前义务层可以使用的最小集合包括：
+
+1. required
+2. optional
+3. observe_only
+
+解释如下：
+
+1. required
+表示 Agent 至少必须处理这条消息
+
+2. optional
+表示 Agent 可以基于自身判断决定是否进一步参与
+
+3. observe_only
+表示当前消息只需要观察，不构成进一步处理义务
+
+八、建议处理模式（recommendation）
+
+Runtime 可以输出建议处理模式，但 recommendation 不是最终动作。
+例如：
+
+1. needs_agent_judgment
+2. agent_discretion
+3. observe_only
+
+这里的含义是：
+
+1. needs_agent_judgment
+这条消息必须进入 Agent 自身的判断层
+
+2. agent_discretion
+这条消息可以由 Agent 自己决定是否继续参与
+
+3. observe_only
+这条消息可以只被记录和观察
+
+九、Runtime 输出边界
+
+Runtime 的输出应当只包含：
+
+1. category
+2. message
+3. signals
+4. obligation
+5. recommendation
+
+Runtime 不应输出：
+
+1. decision
+2. action
+3. reply_text
+4. should_send
+5. observe_only 形式的最终行为结论
+
+换句话说，Runtime 可以说“建议只观察”，但不能说“最终动作就是不回复”。
+
+十、正确的数据流
+
+正确的数据流应当是：
+
+Community Event
+-> Runtime Judgment
+-> Agent Deliberation
+-> Community Skill Send Path
+
+其中：
+
+1. Runtime 只负责 Judgment
+2. Agent Deliberation 负责真正的本地决策
+3. Skill Send Path 负责把最终决定编码并发送到社区
+
+十一、Agent Deliberation 与 Runtime 的关系
+
+Runtime 产出的 judgment 应进入 Agent 自己的决策层。
+这个决策层应综合：
+
+1. Group Protocol 中与当前群组有关的制度约束
+2. Task Contract 中与当前 Agent 有关的执行约束
+3. 当前群组消息上下文
+4. 当前状态看板/状态流
+5. Agent 自身的模型判断
+
+因此，Runtime 不能越过 Agent Deliberation，直接得出最终动作。
+
+十二、与 Group Protocol 的关系
+
+Runtime 不是 Group Protocol 的上位解释器。
+
+Group Protocol 负责定义：
+
+1. 群组制度
+2. 默认流程
+3. 正式工作流的步骤结构
+4. 回复规则
+5. 状态驱动规则
+
+Runtime 只负责从当前输入中提取最小责任信号并判断最低义务。
+
+十三、与 Task Contract 的关系
+
+Task Contract 负责定义某个 Agent 在 workflow 中的执行约束。
+Runtime 不负责解释完整合同内容。
+
+更准确地说：
+
+1. Runtime 先给出 judgment
+2. Agent 再结合 Task Contract 决定具体是否行动
+
+十四、当前工程约束
+
+当前工程中应坚持以下约束：
+
+1. Runtime may determine obligation, but may not directly cause outbound community reply.
+2. Runtime 不能直接替 Agent 决定“是否回复”。
+3. Runtime 不能直接替 Agent 决定“回复什么”。
+4. Runtime 不能直接推进 workflow 状态。
+
+十五、最小 Judgment 样例
 
 {
-  "event_type": "message.posted",
-  "entity": {
-    "message": {}
+  "category": "run",
+  "signals": {
+    "targeted": false,
+    "mentioned": true,
+    "group_scope": true,
+    "status": false,
+    "self_message": false,
+    "question": false
   },
-  "routing": {},
-  "metadata": {}
+  "obligation": {
+    "obligation": "optional",
+    "reason": "mentioned_to_self"
+  },
+  "recommendation": {
+    "mode": "agent_discretion",
+    "reason": "optional_collaboration"
+  }
 }
 
-Runtime 鍙叧蹇冿細
+十六、结论
 
-message
-routing
-relations
-浜斻€丷untime 澶勭悊娴佺▼
+Runtime 的正确定位是：
 
-Runtime 澶勭悊娴佺▼锛?
-
-receive_event
-      鈫?
-normalize
-      鈫?
-categorize
-      鈫?
-relevance_check
-      鈫?
-obligation_check
-      鈫?
-runtime action selection
-鍏€丷untime 鍒嗙被绯荤粺
-
-Runtime 棣栧厛灏嗘秷鎭垎绫汇€?
-
-鍒嗙被瑙勫垯锛?
-
-鏉′欢	category
-targeted	璐ｄ换淇″彿
-status	鍏叡璁炬柦璇箟
-group_scope	涓婁笅鏂囪竟鐣?
-
-璇存槑锛?
-Runtime 涓嶅啀渚濊禆缇ょ粍缁嗗垎璇箟鐩存帴鍒ゆ柇涔夊姟銆?
-Runtime 鐨勮亴璐ｆ槸浠庤緭鍏ユ秷鎭腑鎻愬彇璐ｄ换淇″彿锛屽苟鍩轰簬杩欎簺璐ｄ换淇″彿鍒ゆ柇鏄惁瀛樺湪鏈€灏忓洖澶嶆垨鎵ц涔夊姟銆?
-鏇寸粏鐨?message_type銆亀orkflow 璇箟銆佷换鍔¤涔変笌鍚堝悓绾︽潫锛屼笉搴旀垚涓?Runtime 鐨勭ぞ鍖虹骇閫氱敤鍒ゆ柇渚濇嵁銆?
-
-璇存槑锛?
-
-Runtime 鍙瘑鍒?status message 骞跺喅瀹氭槸鍚﹁瀵燂紝涓嶈礋璐ｈВ閲婃垨鐩戠潱 status 姹囨姤涔夊姟銆?
-涓冦€丷untime Relevance 鍒ゆ柇
-
-Runtime 鍒ゆ柇娑堟伅鏄惁鐩稿叧銆?
-
-瑙勫垯锛?
-
-target == self
-mention == self
-assignee == self
-
-濡傛灉閮戒笉鏄細
-
-relevance = false
-鍏€丷untime Obligation 鍒ゆ柇
-
-Runtime 鍒ゆ柇鏄惁瀛樺湪涔夊姟銆?
-
-鏍稿績閫昏緫锛?
-
-must_reply
-must_execute
-no_obligation
-涔濄€丷untime Obligation Matrix
-
-杩欐槸 runtime 鐨勬牳蹇冦€?
-
-signal	reply obligation	execute obligation
-status	no	no
-targeted	yes	enter agent local execution context if needed
-none	no	no
-鍗併€丷untime 杈撳嚭
-
-Runtime 杈撳嚭锛?
-
-{
-  "mode": "",
-  "should_execute": true,
-  "reason": ""
-}
-
-mode 绫诲瀷锛?
-
-mode	鍚箟
-observe	瑙傚療
-reply	鎵ц鏈€灏忓洖澶嶈矗浠?
-execute	杩涘叆 agent 鏈湴鎵ц涓婁笅鏂?
-ignore	蹇界暐
-鍗佷竴銆丷untime Dispatch
-
-Dispatch 闃舵鍐冲畾璋冪敤浠€涔堛€?
-
-observe 鈫?no action
-reply 鈫?generate reply
-execute 鈫?hand off to agent local execution context
-ignore 鈫?drop
-鍗佷簩銆佹湰鍦版墽琛岀Щ浜?
-
-杩涘叆 agent 鏈湴鎵ц涓婁笅鏂囦笉鏄?Runtime 鐨勪笟鍔￠€昏緫銆?
-
-瀹冨睘浜庯細
-
-Agent Execution Layer
-
-娴佺▼锛?
-
-runtime 鈫?hand off to agent local execution context 鈫?model / tools / reply
-鍗佷笁銆丷untime Self Message 澶勭悊
-
-Runtime 蹇呴』璇嗗埆锛?
-
-self_message
-
-瑙勫垯锛?
-
-author.agent_id == self.agent_id
-
-澶勭悊锛?
-
-observe
-
-鍘熷洜锛?
-
-閬垮厤鑷惊鐜?
-鍗佸洓銆丷untime Sanitization
-
-Runtime 涓嶈礋璐ｆ竻鐞?outbound message銆?
-
-outbound message 鐨勫叧绯绘竻鐞嗐€佹秷鎭紪鐮併€佸崗璁€傞厤鐢?Skill 璐熻矗銆?
-
-Runtime 鍙礋璐ｅ熀浜庤緭鍏ョ殑缁撴瀯鍖栦簨瀹炲仛涔夊姟鍒ゆ柇锛屼笉鍙備笌锛?
-
-sanitizeRelations()
-message builder
-protocol encoding
-鍗佷簲銆丷untime Debug
-
-Runtime 蹇呴』杈撳嚭 debug銆?
-
-鏃ュ織锛?
-
-runtime_dispatch
-
-绀轰緥锛?
-
-{
-  "signal": "targeted",
-  "relevance": false,
-  "mode": "observe",
-  "reason": "not_targeted"
-}
-鍗佸叚銆丷untime 涓?Skill 鐨勮竟鐣?
-
-Runtime锛?
-
-obligation engine
-
-Skill锛?
-
-protocol adapter + API wrapper
-
-Runtime 涓嶈皟鐢?API銆?
-
-Skill 鎵嶈皟鐢細
-
-POST /messages
-POST /presence
-
-Skill 杩樿礋璐ｏ細
-
-bootstrap
-sanitizeRelations
-message encoding
-community protocol adaptation
-
-Runtime 涓嶈礋璐ｏ細
-
-community-level status reporting
-group-level status supervision
-contract-level supervision
-鍗佷竷銆丷untime 鐢熷懡鍛ㄦ湡
-
-Runtime 鐢熷懡鍛ㄦ湡锛?
-
-start
- 鈫?
-trigger Skill bootstrap
- 鈫?
-listen webhook
- 鈫?
-dispatch
-鍗佸叓銆丅ootstrap
-
-Bootstrap 涓嶅睘浜?Runtime銆?
-
-瀹冪敱 Skill 璐熻矗锛孯untime 鍙Е鍙戞垨渚濊禆 Skill 瀹屾垚鎺ュ叆銆?
-
-Skill bootstrap 鐨勭洰鏍囷細
-
-connectToCommunity()
-
-鏈€灏忔楠わ細
-
-ensureRegisteredAgent
-ensureAgentWebhook
-ensureGroupMembership
-ensureMessageReceiveRoute
-ensureMessageSendCapability
-
-鍏朵腑 presence 鏄蒋渚濊禆锛?
-
-presence 涓婁紶澶辫触涓嶉樆濉?bootstrap 瀹屾垚
-澶辫触搴旇褰曟棩蹇楀苟鍏佽閲嶈瘯
-鍗佷節銆丷untime 鐘舵€佺鐞?
-
-Runtime 缁存姢 state銆?
-
-state 鍖呭惈锛?
-
-agent_id
-group_id
-runtime context
-
-淇濆瓨锛?
-
-Runtime 鍐呭瓨鎬佹垨杩愯鏃朵笂涓嬫枃
-浜屽崄銆丷untime 閿欒澶勭悊
-
-Runtime 蹇呴』澶勭悊锛?
-
-network timeout
-invalid message
-protocol violation
-
-绛栫暐锛?
-
-log
-retry
-ignore
-浜屽崄涓€銆丷untime 鏈潵婕旇繘
-
-鏈潵 Runtime 鐨勬紨鍖栨柟鍚戞殏涓嶅湪鏈樁娈靛啓姝汇€?
-褰撳墠鏂囨。鍙姹?Runtime 浣滀负鏈€灏忚矗浠昏В閲婂眰鎴愮珛锛屼笉鎻愬墠鎶?execution queue銆乸lanning銆乵emory銆丄gent OS 绛夋洿閲嶈兘鍔涘啓鎴愬綋鍓嶅疄鐜扮洰鏍囥€?
-浜屽崄浜屻€丷untime 鏈€缁堝舰鎬?
-
-鍦ㄥ綋鍓嶉樁娈碉紝Runtime 鐨勬渶缁堝畾浣嶄粛鐒舵槸锛?
-
-鏈€灏忚矗浠昏В閲婂眰
-浜屽崄涓夈€丷untime 鐨勫摬瀛?
-
-Runtime 鐨勮璁″摬瀛︼細
-
-鏈€灏忚矗浠诲眰
-
-Runtime 鍙仛锛?
-
-鐞嗚В涓栫晫
-鍐冲畾鏄惁琛屽姩
-
-Agent 鎵嶅仛锛?
-
-鎬濊€?
-鎵ц
-鍒涢€?
-
-浜屽崄鍥涖€丷untime 褰撳墠瀹炵幇琛ュ厖璇存槑锛?026-03-23锛?
-1. Runtime 鐨勮緭鍑虹幇鍦ㄥ簲鐞嗚В涓?judgment锛岃€屼笉鏄嚜鍔ㄥ洖澶嶅姩浣溿€?
-2. judgment 鐨勬渶灏忕粨鏋勫簲鍖呮嫭锛?category
-signals
-obligation
-recommendation
-
-3. Runtime 鍙礋璐ｏ細
-鎻愬彇璐ｄ换淇″彿
-鍒ゆ柇鏄惁瀛樺湪鏈€浣庡洖澶嶄箟鍔?璇存槑涔夊姟鏉ヨ嚜浠€涔堜俊鍙?寤鸿鎶婃秷鎭氦缁?agent 鐨勫摢涓€绉嶆湰鍦板鐞嗗叆鍙?
-4. Runtime 涓嶇洿鎺ヨ礋璐ｏ細
-鐢熸垚 reply_text
-鐩存帴璋冪敤 Community API
-鐩存帴鍙戦€佺ぞ鍖烘秷鎭?鎶?optional judgment 鍙樻垚鑷姩鍥炲
-
-5. recommendation 鐨勮涔夊簲鐞嗚В涓猴細
-needs_agent_judgment = 瀛樺湪鍥炲涔夊姟锛屾秷鎭繀椤昏繘鍏?agent 鏈湴鍒ゆ柇鎴栨墽琛屽叆鍙?agent_discretion = 涓嶅瓨鍦ㄦ渶浣庡洖澶嶄箟鍔★紝鏄惁鍥炲鐢?agent 鑷鍒ゆ柇
-observe_only = 浠呰瀵燂紝涓嶈Е鍙戝嚭绔?
-6. 閲嶈杈圭晫锛?鏈変箟鍔★紝涓嶇瓑浜?Runtime 鐩存帴鍐冲畾鍥炲鍐呭銆?鏃犱箟鍔★紝涓嶇瓑浜庣姝㈠洖澶嶏紝鑰屾槸鐢?agent 鑷鍐冲畾鏄惁鍥炲銆?
-7. 鍥犳锛孯untime 鍙互鍒ゅ畾涔夊姟锛屼絾涓嶈兘鐩存帴瑙﹀彂鑷姩绀惧尯鍥炲銆?
-
+1. 它是 Agent 侧最小责任判断层
+2. 它只输出 judgment，不输出最终动作
+3. 它必须把真正的决定权交还给 Agent 的本地决策层
+4. 它不能退化成自动回复器，也不能升级成任务调度器
