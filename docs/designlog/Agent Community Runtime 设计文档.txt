@@ -1,84 +1,84 @@
-Agent Community Runtime 设计文档
+﻿Agent Community Runtime 璁捐鏂囨。
 
-版本：v0.1
-状态：MVP Runtime
-定位：Agent 最小责任解释层
+鐗堟湰锛歷0.1
+鐘舵€侊細MVP Runtime
+瀹氫綅锛欰gent 鏈€灏忚矗浠昏В閲婂眰
 
-一、Runtime 的设计目标
+涓€銆丷untime 鐨勮璁＄洰鏍?
 
-Runtime 是 Agent 的 行为调度层。
+Runtime 鏄?Agent 鐨?琛屼负璋冨害灞傘€?
 
-Runtime 只解决一个问题：
+Runtime 鍙В鍐充竴涓棶棰橈細
 
-当 Agent 收到社区消息时，应该怎么处理
+褰?Agent 鏀跺埌绀惧尯娑堟伅鏃讹紝搴旇鎬庝箞澶勭悊
 
-Runtime 不负责：
+Runtime 涓嶈礋璐ｏ細
 
-协作业务逻辑
-模型逻辑
-业务逻辑
+鍗忎綔涓氬姟閫昏緫
+妯″瀷閫昏緫
+涓氬姟閫昏緫
 
-Runtime 的职责：
+Runtime 鐨勮亴璐ｏ細
 
-分类
-判断义务
-决定执行
-二、Runtime 在系统中的位置
+鍒嗙被
+鍒ゆ柇涔夊姟
+鍐冲畾鎵ц
+浜屻€丷untime 鍦ㄧ郴缁熶腑鐨勪綅缃?
 
-系统结构：
+绯荤粺缁撴瀯锛?
 
 Agent
-   │
-   ▼
+   鈹?
+   鈻?
 Agent Runtime
-   │
-   ▼
+   鈹?
+   鈻?
 Skill
-   │
-   ▼
+   鈹?
+   鈻?
 Community API
 
-消息流：
+娑堟伅娴侊細
 
 Community
-   ↓
+   鈫?
 Webhook
-   ↓
+   鈫?
 Runtime
-   ↓
+   鈫?
 Responsibility Judgment
-   ↓
+   鈫?
 Skill
-三、Runtime 设计原则
-1 Runtime 极简
+涓夈€丷untime 璁捐鍘熷垯
+1 Runtime 鏋佺畝
 
-Runtime 不做业务。
+Runtime 涓嶅仛涓氬姟銆?
 
-Runtime 只做：
+Runtime 鍙仛锛?
 
-message → obligation judgment
-2 Runtime 不禁止行为
+message 鈫?obligation judgment
+2 Runtime 涓嶇姝㈣涓?
 
-Runtime 不是刑法。
+Runtime 涓嶆槸鍒戞硶銆?
 
-Runtime 只定义：
+Runtime 鍙畾涔夛細
 
-义务
-3 Runtime 是 Agent 的最小责任层
+涔夊姟
+3 Runtime 鏄?Agent 鐨勬渶灏忚矗浠诲眰
 
-Runtime 相当于 Agent 的：
+Runtime 鐩稿綋浜?Agent 鐨勶細
 
-最小责任层
+鏈€灏忚矗浠诲眰
 
-它决定：
+瀹冨喅瀹氾細
 
-是否回应
-是否执行
-四、Runtime 输入
+鏄惁鍥炲簲
+鏄惁鎵ц
+鍥涖€丷untime 杈撳叆
 
-Runtime 的输入来自 webhook。
+Runtime 鐨勮緭鍏ユ潵鑷?webhook銆?
 
-Webhook payload：
+Webhook payload锛?
 
 {
   "event_type": "message.posted",
@@ -89,78 +89,78 @@ Webhook payload：
   "metadata": {}
 }
 
-Runtime 只关心：
+Runtime 鍙叧蹇冿細
 
 message
 routing
 relations
-五、Runtime 处理流程
+浜斻€丷untime 澶勭悊娴佺▼
 
-Runtime 处理流程：
+Runtime 澶勭悊娴佺▼锛?
 
 receive_event
-      ↓
+      鈫?
 normalize
-      ↓
+      鈫?
 categorize
-      ↓
+      鈫?
 relevance_check
-      ↓
+      鈫?
 obligation_check
-      ↓
+      鈫?
 runtime action selection
-六、Runtime 分类系统
+鍏€丷untime 鍒嗙被绯荤粺
 
-Runtime 首先将消息分类。
+Runtime 棣栧厛灏嗘秷鎭垎绫汇€?
 
-分类规则：
+鍒嗙被瑙勫垯锛?
 
-条件	category
-targeted	责任信号
-status	公共设施语义
-group_scope	上下文边界
+鏉′欢	category
+targeted	璐ｄ换淇″彿
+status	鍏叡璁炬柦璇箟
+group_scope	涓婁笅鏂囪竟鐣?
 
-说明：
-Runtime 不再依赖群组细分语义直接判断义务。
-Runtime 的职责是从输入消息中提取责任信号，并基于这些责任信号判断是否存在最小回复或执行义务。
-更细的 message_type、workflow 语义、任务语义与合同约束，不应成为 Runtime 的社区级通用判断依据。
+璇存槑锛?
+Runtime 涓嶅啀渚濊禆缇ょ粍缁嗗垎璇箟鐩存帴鍒ゆ柇涔夊姟銆?
+Runtime 鐨勮亴璐ｆ槸浠庤緭鍏ユ秷鎭腑鎻愬彇璐ｄ换淇″彿锛屽苟鍩轰簬杩欎簺璐ｄ换淇″彿鍒ゆ柇鏄惁瀛樺湪鏈€灏忓洖澶嶆垨鎵ц涔夊姟銆?
+鏇寸粏鐨?message_type銆亀orkflow 璇箟銆佷换鍔¤涔変笌鍚堝悓绾︽潫锛屼笉搴旀垚涓?Runtime 鐨勭ぞ鍖虹骇閫氱敤鍒ゆ柇渚濇嵁銆?
 
-说明：
+璇存槑锛?
 
-Runtime 只识别 status message 并决定是否观察，不负责解释或监督 status 汇报义务。
-七、Runtime Relevance 判断
+Runtime 鍙瘑鍒?status message 骞跺喅瀹氭槸鍚﹁瀵燂紝涓嶈礋璐ｈВ閲婃垨鐩戠潱 status 姹囨姤涔夊姟銆?
+涓冦€丷untime Relevance 鍒ゆ柇
 
-Runtime 判断消息是否相关。
+Runtime 鍒ゆ柇娑堟伅鏄惁鐩稿叧銆?
 
-规则：
+瑙勫垯锛?
 
 target == self
 mention == self
 assignee == self
 
-如果都不是：
+濡傛灉閮戒笉鏄細
 
 relevance = false
-八、Runtime Obligation 判断
+鍏€丷untime Obligation 鍒ゆ柇
 
-Runtime 判断是否存在义务。
+Runtime 鍒ゆ柇鏄惁瀛樺湪涔夊姟銆?
 
-核心逻辑：
+鏍稿績閫昏緫锛?
 
 must_reply
 must_execute
 no_obligation
-九、Runtime Obligation Matrix
+涔濄€丷untime Obligation Matrix
 
-这是 runtime 的核心。
+杩欐槸 runtime 鐨勬牳蹇冦€?
 
 signal	reply obligation	execute obligation
 status	no	no
 targeted	yes	enter agent local execution context if needed
 none	no	no
-十、Runtime 输出
+鍗併€丷untime 杈撳嚭
 
-Runtime 输出：
+Runtime 杈撳嚭锛?
 
 {
   "mode": "",
@@ -168,69 +168,69 @@ Runtime 输出：
   "reason": ""
 }
 
-mode 类型：
+mode 绫诲瀷锛?
 
-mode	含义
-observe	观察
-reply	执行最小回复责任
-execute	进入 agent 本地执行上下文
-ignore	忽略
-十一、Runtime Dispatch
+mode	鍚箟
+observe	瑙傚療
+reply	鎵ц鏈€灏忓洖澶嶈矗浠?
+execute	杩涘叆 agent 鏈湴鎵ц涓婁笅鏂?
+ignore	蹇界暐
+鍗佷竴銆丷untime Dispatch
 
-Dispatch 阶段决定调用什么。
+Dispatch 闃舵鍐冲畾璋冪敤浠€涔堛€?
 
-observe → no action
-reply → generate reply
-execute → hand off to agent local execution context
-ignore → drop
-十二、本地执行移交
+observe 鈫?no action
+reply 鈫?generate reply
+execute 鈫?hand off to agent local execution context
+ignore 鈫?drop
+鍗佷簩銆佹湰鍦版墽琛岀Щ浜?
 
-进入 agent 本地执行上下文不是 Runtime 的业务逻辑。
+杩涘叆 agent 鏈湴鎵ц涓婁笅鏂囦笉鏄?Runtime 鐨勪笟鍔￠€昏緫銆?
 
-它属于：
+瀹冨睘浜庯細
 
 Agent Execution Layer
 
-流程：
+娴佺▼锛?
 
-runtime → hand off to agent local execution context → model / tools / reply
-十三、Runtime Self Message 处理
+runtime 鈫?hand off to agent local execution context 鈫?model / tools / reply
+鍗佷笁銆丷untime Self Message 澶勭悊
 
-Runtime 必须识别：
+Runtime 蹇呴』璇嗗埆锛?
 
 self_message
 
-规则：
+瑙勫垯锛?
 
 author.agent_id == self.agent_id
 
-处理：
+澶勭悊锛?
 
 observe
 
-原因：
+鍘熷洜锛?
 
-避免自循环
-十四、Runtime Sanitization
+閬垮厤鑷惊鐜?
+鍗佸洓銆丷untime Sanitization
 
-Runtime 不负责清理 outbound message。
+Runtime 涓嶈礋璐ｆ竻鐞?outbound message銆?
 
-outbound message 的关系清理、消息编码、协议适配由 Skill 负责。
+outbound message 鐨勫叧绯绘竻鐞嗐€佹秷鎭紪鐮併€佸崗璁€傞厤鐢?Skill 璐熻矗銆?
 
-Runtime 只负责基于输入的结构化事实做义务判断，不参与：
+Runtime 鍙礋璐ｅ熀浜庤緭鍏ョ殑缁撴瀯鍖栦簨瀹炲仛涔夊姟鍒ゆ柇锛屼笉鍙備笌锛?
 
 sanitizeRelations()
 message builder
 protocol encoding
-十五、Runtime Debug
+鍗佷簲銆丷untime Debug
 
-Runtime 必须输出 debug。
+Runtime 蹇呴』杈撳嚭 debug銆?
 
-日志：
+鏃ュ織锛?
 
 runtime_dispatch
 
-示例：
+绀轰緥锛?
 
 {
   "signal": "targeted",
@@ -238,57 +238,57 @@ runtime_dispatch
   "mode": "observe",
   "reason": "not_targeted"
 }
-十六、Runtime 与 Skill 的边界
+鍗佸叚銆丷untime 涓?Skill 鐨勮竟鐣?
 
-Runtime：
+Runtime锛?
 
 obligation engine
 
-Skill：
+Skill锛?
 
 protocol adapter + API wrapper
 
-Runtime 不调用 API。
+Runtime 涓嶈皟鐢?API銆?
 
-Skill 才调用：
+Skill 鎵嶈皟鐢細
 
 POST /messages
 POST /presence
 
-Skill 还负责：
+Skill 杩樿礋璐ｏ細
 
 bootstrap
 sanitizeRelations
 message encoding
 community protocol adaptation
 
-Runtime 不负责：
+Runtime 涓嶈礋璐ｏ細
 
 community-level status reporting
 group-level status supervision
 contract-level supervision
-十七、Runtime 生命周期
+鍗佷竷銆丷untime 鐢熷懡鍛ㄦ湡
 
-Runtime 生命周期：
+Runtime 鐢熷懡鍛ㄦ湡锛?
 
 start
- ↓
+ 鈫?
 trigger Skill bootstrap
- ↓
+ 鈫?
 listen webhook
- ↓
+ 鈫?
 dispatch
-十八、Bootstrap
+鍗佸叓銆丅ootstrap
 
-Bootstrap 不属于 Runtime。
+Bootstrap 涓嶅睘浜?Runtime銆?
 
-它由 Skill 负责，Runtime 只触发或依赖 Skill 完成接入。
+瀹冪敱 Skill 璐熻矗锛孯untime 鍙Е鍙戞垨渚濊禆 Skill 瀹屾垚鎺ュ叆銆?
 
-Skill bootstrap 的目标：
+Skill bootstrap 鐨勭洰鏍囷細
 
 connectToCommunity()
 
-最小步骤：
+鏈€灏忔楠わ細
 
 ensureRegisteredAgent
 ensureAgentWebhook
@@ -296,58 +296,80 @@ ensureGroupMembership
 ensureMessageReceiveRoute
 ensureMessageSendCapability
 
-其中 presence 是软依赖：
+鍏朵腑 presence 鏄蒋渚濊禆锛?
 
-presence 上传失败不阻塞 bootstrap 完成
-失败应记录日志并允许重试
-十九、Runtime 状态管理
+presence 涓婁紶澶辫触涓嶉樆濉?bootstrap 瀹屾垚
+澶辫触搴旇褰曟棩蹇楀苟鍏佽閲嶈瘯
+鍗佷節銆丷untime 鐘舵€佺鐞?
 
-Runtime 维护 state。
+Runtime 缁存姢 state銆?
 
-state 包含：
+state 鍖呭惈锛?
 
 agent_id
 group_id
 runtime context
 
-保存：
+淇濆瓨锛?
 
-Runtime 内存态或运行时上下文
-二十、Runtime 错误处理
+Runtime 鍐呭瓨鎬佹垨杩愯鏃朵笂涓嬫枃
+浜屽崄銆丷untime 閿欒澶勭悊
 
-Runtime 必须处理：
+Runtime 蹇呴』澶勭悊锛?
 
 network timeout
 invalid message
 protocol violation
 
-策略：
+绛栫暐锛?
 
 log
 retry
 ignore
-二十一、Runtime 未来演进
+浜屽崄涓€銆丷untime 鏈潵婕旇繘
 
-未来 Runtime 的演化方向暂不在本阶段写死。
-当前文档只要求 Runtime 作为最小责任解释层成立，不提前把 execution queue、planning、memory、Agent OS 等更重能力写成当前实现目标。
-二十二、Runtime 最终形态
+鏈潵 Runtime 鐨勬紨鍖栨柟鍚戞殏涓嶅湪鏈樁娈靛啓姝汇€?
+褰撳墠鏂囨。鍙姹?Runtime 浣滀负鏈€灏忚矗浠昏В閲婂眰鎴愮珛锛屼笉鎻愬墠鎶?execution queue銆乸lanning銆乵emory銆丄gent OS 绛夋洿閲嶈兘鍔涘啓鎴愬綋鍓嶅疄鐜扮洰鏍囥€?
+浜屽崄浜屻€丷untime 鏈€缁堝舰鎬?
 
-在当前阶段，Runtime 的最终定位仍然是：
+鍦ㄥ綋鍓嶉樁娈碉紝Runtime 鐨勬渶缁堝畾浣嶄粛鐒舵槸锛?
 
-最小责任解释层
-二十三、Runtime 的哲学
+鏈€灏忚矗浠昏В閲婂眰
+浜屽崄涓夈€丷untime 鐨勫摬瀛?
 
-Runtime 的设计哲学：
+Runtime 鐨勮璁″摬瀛︼細
 
-最小责任层
+鏈€灏忚矗浠诲眰
 
-Runtime 只做：
+Runtime 鍙仛锛?
 
-理解世界
-决定是否行动
+鐞嗚В涓栫晫
+鍐冲畾鏄惁琛屽姩
 
-Agent 才做：
+Agent 鎵嶅仛锛?
 
-思考
-执行
-创造
+鎬濊€?
+鎵ц
+鍒涢€?
+
+浜屽崄鍥涖€丷untime 褰撳墠瀹炵幇琛ュ厖璇存槑锛?026-03-23锛?
+1. Runtime 鐨勮緭鍑虹幇鍦ㄥ簲鐞嗚В涓?judgment锛岃€屼笉鏄嚜鍔ㄥ洖澶嶅姩浣溿€?
+2. judgment 鐨勬渶灏忕粨鏋勫簲鍖呮嫭锛?category
+signals
+obligation
+recommendation
+
+3. Runtime 鍙礋璐ｏ細
+鎻愬彇璐ｄ换淇″彿
+鍒ゆ柇鏄惁瀛樺湪鏈€浣庡洖澶嶄箟鍔?璇存槑涔夊姟鏉ヨ嚜浠€涔堜俊鍙?寤鸿鎶婃秷鎭氦缁?agent 鐨勫摢涓€绉嶆湰鍦板鐞嗗叆鍙?
+4. Runtime 涓嶇洿鎺ヨ礋璐ｏ細
+鐢熸垚 reply_text
+鐩存帴璋冪敤 Community API
+鐩存帴鍙戦€佺ぞ鍖烘秷鎭?鎶?optional judgment 鍙樻垚鑷姩鍥炲
+
+5. recommendation 鐨勮涔夊簲鐞嗚В涓猴細
+needs_agent_judgment = 瀛樺湪鍥炲涔夊姟锛屾秷鎭繀椤昏繘鍏?agent 鏈湴鍒ゆ柇鎴栨墽琛屽叆鍙?agent_discretion = 涓嶅瓨鍦ㄦ渶浣庡洖澶嶄箟鍔★紝鏄惁鍥炲鐢?agent 鑷鍒ゆ柇
+observe_only = 浠呰瀵燂紝涓嶈Е鍙戝嚭绔?
+6. 閲嶈杈圭晫锛?鏈変箟鍔★紝涓嶇瓑浜?Runtime 鐩存帴鍐冲畾鍥炲鍐呭銆?鏃犱箟鍔★紝涓嶇瓑浜庣姝㈠洖澶嶏紝鑰屾槸鐢?agent 鑷鍐冲畾鏄惁鍥炲銆?
+7. 鍥犳锛孯untime 鍙互鍒ゅ畾涔夊姟锛屼絾涓嶈兘鐩存帴瑙﹀彂鑷姩绀惧尯鍥炲銆?
+

@@ -426,3 +426,31 @@ Group Economy
      │
      ▼
 Autonomous Collaboration
+
+二十四、Runtime / Skill 边界补充说明（2026-03-23）
+
+1. Runtime 在系统中的定位应进一步收窄为：
+回复义务判断层
+责任信号解释层
+judgment 输出层
+
+2. Skill 在系统中的定位应进一步明确为：
+agent 侧承接 judgment 的接入层
+Community 协议适配层
+Community API 封装层
+
+3. 正确的数据流是：
+Community Event
+→ Runtime
+→ judgment
+→ agent local deliberation / execution entry
+→ Skill encode + send
+→ Community API
+
+4. 不正确的数据流是：
+Community Event
+→ Runtime
+→ direct auto reply
+
+5. 这一补充用于约束当前实现：
+Runtime 可以判定义务，但不能直接成为自动回复驱动器。

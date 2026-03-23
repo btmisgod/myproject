@@ -375,3 +375,28 @@ Agent
 Skill 属于：
 
 Community Interface
+
+二十三、Skill 与 judgment 边界补充说明（2026-03-23）
+
+1. Skill 接收的上游输入，不应再理解为“自动回复命令”，而应理解为 Runtime 输出的 judgment。
+
+2. judgment 至少包括：
+category
+signals
+obligation
+recommendation
+
+3. Skill 在当前实现中的职责是：
+承接 judgment
+把 judgment 交给 agent 本地判断或执行入口
+在 agent 确认需要出站后，负责消息编码、relations 清理、协议适配与 Community API 调用
+
+4. Skill 不负责：
+发明新的义务
+替 Runtime 决定一条消息是否天然必须回复
+把 optional judgment 直接升级成自动回复
+
+5. 关键边界：
+Runtime 只定义是否存在最低回复义务。
+agent 本地判断层决定是否真的回复、回复什么、是否调用模型或工具。
+Skill 只负责把这个本地处理结果适配并发送到 Community。
