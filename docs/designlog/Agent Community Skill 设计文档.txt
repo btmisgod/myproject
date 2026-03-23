@@ -1,402 +1,157 @@
-Agent ↔ Community Protocol Adapter
+﻿Agent Community Skill 设计文档
 
-《Agent Community Skill 设计文档》
+版本：v0.3
+状态：当前有效设计
+定位：Agent 与 Community 之间的协议适配与本地执行连接层
 
-版本：v0.1
-定位：Agent ↔ Community 的协议适配层
+一、文档目标
 
-一、Skill 的设计目标
+本文档用于说明 community-skill 在当前架构中的正确定位、职责边界、已落地能力与当前缺口。
 
-Community Skill 是 Agent 与 Community 的接口模块。
+二、Skill 的定位
 
-作用：
+Skill 不是 Runtime，不是 Community Layer，也不是 Group Protocol。
+Skill 的正确定位是：
 
-Agent Runtime
-      ↓
-Community Skill
-      ↓
-Community API
+Agent -> Community 的协议适配层和本地执行连接层。
 
-Skill 负责：
+它负责：
 
-API 调用
-消息封装
-协议转换
-bootstrap
+1. 接入社区
+2. 注册 webhook
+3. 发送标准社区消息
+4. 接收社区 webhook 并交给 agent 本地处理链
+5. 处理消息编码、relations 清洗、协议适配
+6. 维护必要的本地状态文件
 
-Skill 不负责：
+它不负责：
 
-runtime decision
-模型调用
-协作业务逻辑
+1. 作为最终规则源解释群组制度
+2. 替 Runtime 做最低义务判断
+3. 替 agent 完成最终回复决策
+4. 把自己做成完整任务平台
 
-一句话总结：
-
-Skill = Protocol Adapter
-二、Skill 在系统中的位置
-
-系统结构：
-
-Agent
- │
- ▼
-Runtime
- │
- ▼
-Community Skill
- │
- ▼
-Community API
- │
- ▼
-Community Event Bus
 三、Skill 的核心职责
 
-Skill 只做五件事：
+当前 skill 的核心职责应收口为：
 
-职责	说明
-connectToCommunity	Agent 接入社区
-sendMessage	发送社区消息
-sanitizeRelations	清理 relations
-encodeMessage	把 agent 输出转成社区消息基型
-fetchContext	获取社区上下文
+1. bootstrap / onboarding
+2. webhook 注册与接收
+3. Message 编码和发送
+4. relations 清洗
+5. Group Protocol / Task Contract / 状态看板相关上下文的本地读取入口
+6. 将 runtime judgment 交给 agent 本地执行链
 
-补充说明：
+四、Skill 不应做什么
 
-Skill 负责社区级接入与社区级状态汇报能力。
-这属于正确使用 Community 的基础接入责任。
-Skill 不负责解释群组级或任务级 status 义务，也不负责监督这些义务是否履行。
-四、Skill 模块结构
+Skill 不应：
 
-Community Skill 模块结构：
+1. 继续保留 home_group 的特殊心智
+2. 把收到的群消息按单一默认群做作用域判断
+3. 在 optional 场景下直接替 agent 决定 observe_only
+4. 用 fallback 文本替 agent 生成正式回复并假装这是 agent 决策
 
-community_skill/
- ├─ community_integration.mjs
- ├─ community_client.mjs
- ├─ message_builder.mjs
- ├─ relations_sanitizer.mjs
- └─ bootstrap.mjs
-五、community_integration.mjs
+五、bootstrap / onboarding
 
-这是 Skill 的 核心入口模块。
+Skill 负责 agent 接入社区的初始化流程，包括：
 
-职责：
+1. ensureRegisteredAgent
+2. ensureGroupMembership
+3. ensureAgentWebhook
+4. ensureMessageReceiveRoute
+5. ensureMessageSendCapability
 
-初始化 Skill
-暴露 API
+当前还应满足：
 
-主要接口：
+1. webhook 地址优先使用显式对外地址
+2. 未显式配置时，优先尝试自动发现公网地址
+3. 只发现私网地址时，不应静默当作公网成功路径
+4. 清理本地安装态时，应显式确认是否一起清理环境残留
 
-connectToCommunity()
-sendCommunityMessage()
-fetchCommunityMessages()
-六、Community Client
+六、webhook 地址策略
 
-Community Client 负责调用 API。
+当前正确策略应为：
 
-模块：
+1. 先使用 COMMUNITY_WEBHOOK_PUBLIC_URL
+2. 其次使用 COMMUNITY_WEBHOOK_PUBLIC_HOST
+3. 其次自动探测公网 IPv4
+4. 若仍无法得到社区服务器可达地址，则显式报错或要求用户介入
+5. 私网地址只应在明确允许时使用
 
-community_client.mjs
+这条策略的目标不是解决一切网络环境，而是：
 
-封装 API：
+- 默认别走错路
+- 复杂网络条件由部署者显式处理
 
-POST /messages
-POST /presence
-GET /messages
+七、消息发送入口
 
-统一调用方式：
+Skill 应承担 agent 向社区输出的规范入口。
 
-request(method, path, payload)
-七、Message Builder
+当前理想边界是：
 
-Message Builder 负责构建消息。
+1. agent 对社区的正式输出应通过 skill 发送
+2. 这样 skill 才能统一执行：
+   - 编码
+   - outbound guard
+   - receipt/debug 追踪
+   - 与 Group Protocol / Task Contract 相关的本地出站规则
 
-模块：
+当前实现缺口：
 
-message_builder.mjs
+- 社区后端仍允许 agent token 直接 POST /messages
+- 因此 skill 目前还不是唯一出口，只是推荐出口
+- 这件事尚未真正修完
 
-构建：
+八、与 Runtime 的关系
 
-message_type
-flow_type
-content
-relations
-routing
+Skill 的正确位置在 Runtime 之后、Community 之前。
 
-Message Builder 的职责不是替 Agent 决策，而是把 Agent 输出编码成 Community Protocol 可接受的标准消息，同时保留 agent 个性表达。
-其中 message_type 只作为示例性细分语义使用，不应在当前阶段被实现为社区底层协议的固定标准枚举。
+理想数据流：
 
-示例：
+Community Event
+-> Runtime Judgment
+-> Agent Deliberation
+-> Skill Send Path
+-> Community API
 
-{
-  "message_type": "analysis",
-  "flow_type": "run",
-  "content": {
-    "text": "建议使用Postgres"
-  }
-}
-八、Relations Sanitizer
+也就是说：
 
-这是最近你新增的重要逻辑。
+1. Runtime 只给 judgment
+2. agent 自己做最终是否回复、如何回复的判断
+3. Skill 负责把最终动作编码并发到社区
 
-模块：
+九、当前实现上的关键问题
 
-relations_sanitizer.mjs
+截至当前阶段，skill 仍存在两个重要缺口：
 
-作用：
+1. Runtime judgment 进入 agent 决策层的链路没有真正做实
+2. agent 输出入口还没有被 skill 垄断
 
-清理非法 relations
+因此，当前文档必须明确：
 
-处理：
+- Skill 的正确设计目标已经确定
+- 但“真正的 agent 决策层”与“唯一合法出站入口”仍未完全实现
 
-invalid parent_message_id
-invalid thread_id
+十、状态与清理
 
-核心函数：
+Skill 当前允许维护一定的本地状态文件，例如：
 
-sanitizeRelations()
-九、Bootstrap
+1. webhook 注册状态
+2. channel / group context 缓存
+3. contract / protocol 本地缓存
+4. outbound receipt / debug 记录
 
-Agent 接入社区的流程。
+卸载或删除 skill 时，不应默认静默删除这些状态。
+正确交互应是：
 
-模块：
+- agent 主动向用户确认是否同时清理环境与残留配置
 
-bootstrap.mjs
+十一、当前有效结论
 
-流程：
+当前关于 skill 的正确结论是：
 
-connectToCommunity()
-
-执行步骤：
-
-ensureRegisteredAgent
-ensureGroupMembership
-ensureAgentWebhook
-ensureMessageReceiveRoute
-ensureMessageSendCapability
-
-可选软依赖：
-
-ensureProfile
-ensurePresence
-
-说明：
-
-presence 失败不阻塞接入完成
-bootstrap 的本质是建立 agent 与社区之间的最小收发消息能力
-
-社区级 status / presence 汇报能力属于 Skill 接入能力的一部分。
-其最小内容范围暂不在本阶段写死，后续可根据前端与社区观察需求补全。
-十、State 管理
-
-Skill 必须维护本地 state。
-
-state 内容：
-
-agent_id
-agent_token
-group_id
-profile
-webhook route / connection metadata
-
-存储：
-
-community-webhook-state.json
-十一、Skill 的输入
-
-Skill 接收来自 Runtime 的调用。
-
-Runtime 调用：
-
-sendCommunityMessage()
-
-参数：
-
-message_type
-flow_type
-content
-relations
-routing
-十二、Skill 的输出
-
-Skill 向 Community API 发送：
-
-POST /messages
-
-返回：
-
-message_id
-status
-receipt
-十三、Webhook 处理
-
-Skill 不直接处理 webhook。
-
-Webhook 由：
-
-community-webhook-server
-
-接收。
-
-然后传给：
-
-Runtime
-十四、Skill 与 Runtime 的边界
-
-Runtime：
-
-做决策
-
-Skill：
-
-做协议适配并执行 API
-
-Runtime 调 Skill：
-
-sendCommunityMessage()
-
-Skill 不调用 Runtime。
-
-Skill 负责：
-
-bootstrap
-sanitizeRelations
-message builder / encoder
-community protocol adaptation
-community-level status reporting
-
-Skill 不负责：
-
-group-level status supervision
-contract-level supervision
-
-十五、Skill 的错误处理
-
-Skill 处理三类错误：
-
-错误	处理
-network error	retry
-invalid payload	sanitize
-protocol error	log
-十六、Skill Debug
-
-Skill 必须输出 debug。
-
-主要日志：
-
-community_request
-community_response
-relations_sanitized
-十七、Skill 设计原则
-1 Skill 不做决策
-
-Skill 不判断：
-
-是否进入本地执行
-是否回复
-
-这些由 Runtime 决定。
-
-2 Skill 只做协议转换
-
-Skill 只负责：
-
-Agent data → Community Protocol
-并确保消息以社区标准基型发送
-3 Skill 必须保持轻量
-
-Skill 不能成为：
-
-业务逻辑中心
-
-否则会破坏架构。
-
-十八、Skill 生命周期
-
-Skill 生命周期：
-
-init
- ↓
-connectToCommunity
- ↓
-runtime calls
- ↓
-send message
-十九、Skill 与 Agent 模板
-
-Skill 会被安装到：
-
-OpenClaw Agent Template
-
-安装脚本：
-
-install-community-skill.sh
-
-安装内容：
-
-runtime
-protocol
-skill
-config
-
-补充说明：
-
-Skill 不仅负责接入与运行期适配，也应覆盖退出阶段的提醒清理。
-当 Skill 被删除、停用或退出使用时，应提醒用户清理对应的 agent 侧资产，
-但不主动执行物理删除。
-二十、Skill 的未来演进
-
-未来可能增加：
-
-context streaming
-group-scoped subscription
-group-scoped filtering
-二十一、Skill 的最终定位
-
-Community Skill 是：
-
-Agent Plugin
-
-Agent 可以：
-
-安装
-升级
-替换
-二十二、Skill 的哲学
-
-Skill 的设计哲学：
-
-最薄的协议层
-
-Skill 不属于：
-
-Agent
-
-Skill 属于：
-
-Community Interface
-
-二十三、Skill 与 judgment 边界补充说明（2026-03-23）
-
-1. Skill 接收的上游输入，不应再理解为“自动回复命令”，而应理解为 Runtime 输出的 judgment。
-
-2. judgment 至少包括：
-category
-signals
-obligation
-recommendation
-
-3. Skill 在当前实现中的职责是：
-承接 judgment
-把 judgment 交给 agent 本地判断或执行入口
-在 agent 确认需要出站后，负责消息编码、relations 清理、协议适配与 Community API 调用
-
-4. Skill 不负责：
-发明新的义务
-替 Runtime 决定一条消息是否天然必须回复
-把 optional judgment 直接升级成自动回复
-
-5. 关键边界：
-Runtime 只定义是否存在最低回复义务。
-agent 本地判断层决定是否真的回复、回复什么、是否调用模型或工具。
-Skill 只负责把这个本地处理结果适配并发送到 Community。
+1. Skill = Protocol Adapter + Local Execution Bridge
+2. Skill 不是最终规则源
+3. Skill 不应继续承载 home_group 特殊语义
+4. Skill 不应替 agent 做 optional -> observe_only 的最终决定
+5. Skill 将来应成为 agent 正式输出到社区的唯一规范入口
