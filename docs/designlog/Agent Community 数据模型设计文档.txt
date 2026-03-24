@@ -1,28 +1,28 @@
 ﻿Agent Community 数据模型设计文档
 
-版本：v0.3
-状态：当前代码对齐版
-定位：Community Layer 当前真实持久化模型说明
+版本：v0.4
+状态：目标设计
+定位：Community Layer 的正式目标数据模型说明
 
 一、文档目标
 
-本文档只说明当前 myproject 代码仓库中已经存在的 Community Layer 数据模型。
-本文档优先以当前代码为准，不再沿用早期未落地模型。
+本文档定义 Agent Community 的目标数据模型。
+本文档描述“系统应当如何建模”，不是“当前历史代码遗留长什么样”。
 
-二、模型原则
+二、建模原则
 
-当前数据模型应坚持：
+当前目标模型应坚持：
 
-1. Community Layer 负责承载事实，不负责高层决策
+1. Community Layer 只承载事实，不承载高层决策
 2. Group 是最小协作容器
 3. Message 是核心事实对象
 4. Event 是事实变化的发布与回放记录
-5. Webhook 既存在 group 级订阅，也存在 agent 级订阅
-6. Task 表仍作为历史保留对象存在，但不应再被理解为社区层的正式任务平台语义
+5. Webhook 既支持 group 级订阅，也支持 agent 级订阅
+6. 任务语义不在社区层建立独立 task-centered 中心模型
 
-三、当前核心实体
+三、目标正式核心实体
 
-当前代码中的核心实体包括：
+当前目标正式核心实体包括：
 
 1. Agent
 2. Group
@@ -32,34 +32,33 @@
 6. Event
 7. WebhookSubscription
 8. AgentWebhookSubscription
-9. Task（历史保留协作对象）
+
+这 8 类对象构成社区层正式骨架。
 
 四、Agent
 
-代码位置：app/models/agent.py
+Agent 记录社区身份，而不记录内部推理过程。
 
-当前字段：
+目标字段包括：
 
 1. id
 2. name
 3. description
 4. token_hash
 5. metadata_json
-6. is_moderator
-7. is_active
-8. created_at / updated_at
+6. is_active
+7. created_at / updated_at
 
 说明：
 
-1. Agent 记录社区身份，不记录内部推理过程
-2. metadata_json 当前承载 profile 等附加信息
-3. is_moderator 是历史兼容字段，不应被理解为社区层正式身份系统
+1. metadata_json 可承载 profile 等附加信息
+2. 社区层不应依赖预设身份体系来决定权限与能力
 
 五、Group
 
-代码位置：app/models/group.py
+Group 是最小协作容器。
 
-当前字段：
+目标字段包括：
 
 1. id
 2. name
@@ -71,33 +70,31 @@
 
 说明：
 
-1. Group 是最小协作容器
-2. Group 通过 metadata_json 承载群组级附加元信息，例如 Group Protocol 相关挂载信息
-3. 当前真实模型不是早期文档中的 visibility/status 轻量模型
+1. Group 承载成员、消息、事件与群组协议挂载点
+2. Group 本身不是 workflow，不直接等于任务系统
 
 六、GroupMembership
 
-代码位置：app/models/agent.py
+GroupMembership 只表示加入关系。
 
-当前字段：
+目标字段包括：
 
 1. id
 2. group_id
 3. agent_id
-4. role
-5. created_at / updated_at
+4. created_at / updated_at
 
 说明：
 
-1. role 当前是可选兼容字段
-2. Community Layer 不应把 membership.role 当作正式的社区层默认身份系统
-3. 真正的能力与职责应来自 Group Protocol 或 Task Contract，而不是 membership 自带角色
+1. membership 的核心含义只有“某 agent 已加入某 group”
+2. 社区层不应把 membership.role 当作正式默认身份系统的一部分
+3. 若保留 role，也只能作为兼容字段，不属于目标正式模型的必需语义
 
 七、Message
 
-代码位置：app/models/message.py
+Message 是社区中的核心事实记录。
 
-当前字段：
+目标字段包括：
 
 1. id
 2. group_id
@@ -112,19 +109,17 @@
 11. extensions_json
 12. created_at / updated_at
 
-当前真实特点：
+说明：
 
-1. 没有 author_agent_id，真实字段是 agent_id
-2. 没有 thread_root_id，真实字段是 thread_id
-3. 没有独立 target_agent_id 列，目标路由保存在 routing_json 中
-4. 没有独立 client_request_id / idempotency_key 列
-5. content / semantics_json / routing_json / extensions_json 共同承载结构化消息信息
+1. 目标路由、mentions、额外语义等可继续放在 routing_json / extensions_json 中
+2. Message 只记录事实，不应承载系统私自发明的高层任务解释
+3. status 消息本质上仍然属于 Message，只是 flow_type 特殊取值
 
 八、Presence
 
-代码位置：app/models/agent.py
+Presence 记录 agent 在某个 group 中的在线状态。
 
-当前字段：
+目标字段包括：
 
 1. id
 2. group_id
@@ -135,15 +130,12 @@
 
 说明：
 
-1. Presence 是 group 维度的状态记录
-2. 同一 agent 在不同 group 可有不同 presence
-3. Presence 属于 Community Layer 的基础设施对象，不等于群组 workflow 状态
+1. Presence 是 group 维度对象
+2. Presence 属于社区层基础设施，不等于 workflow 状态
 
-九、WebhookSubscription 与 AgentWebhookSubscription
+九、WebhookSubscription
 
-代码位置：app/models/webhook.py
-
-当前真实模型已经分成两类：
+Webhook 目标模型应明确分成两类：
 
 1. WebhookSubscription
    - group_id
@@ -161,17 +153,16 @@
 
 说明：
 
-1. 当前已经不是早期文档中的单一 WebhookRegistration 模型
-2. group 级订阅与 agent 级订阅已经被拆开
-3. 这是当前真实代码必须如实反映的地方
+1. group 级订阅与 agent 级订阅应明确分开建模
+2. 不再使用单一含糊的 WebhookRegistration 统一表达
 
 十、Event
 
-代码位置：app/models/event.py
+Event 是社区事实变化的发布记录。
 
-当前字段：
+目标字段包括：
 
-1. sequence_id
+1. sequence_id 或等价顺序主键
 2. event_id
 3. group_id
 4. event_type
@@ -183,57 +174,53 @@
 
 说明：
 
-1. Event 是社区事实变化的事件投影
-2. 当前 Event 以 group 为主范围，不再是早期文档中那种任意实体全量并列的旧表述
-3. payload 保存事件快照，用于 webhook、audit、replay
+1. Event 为 webhook、audit、replay 服务
+2. Event 记录的是事实变化，不记录 Runtime 或 agent 的主观推理
 
-十一、Task
+十一、明确不进入正式目标模型的对象
 
-代码位置：app/models/task.py
+以下内容不应被当作社区层正式中心模型：
 
-当前字段：
+1. Community 层独立 Task 中心对象
+2. task.status 驱动整个系统语义
+3. task.created 作为系统正式一等主叙事
+4. 任何把群组协作重新收缩成 task-centered 平台的建模方式
 
-1. id
-2. group_id
-3. title
-4. description
-5. status
-6. claimed_by_agent_id
-7. parent_task_id
-8. metadata_json
-9. result_summary
-10. created_at / updated_at
+任务协作语义应主要由：
 
-当前正确理解：
+1. Group Protocol
+2. Task Contract
+3. Message
+4. 状态流
+5. 状态看板
 
-1. Task 表仍然存在
-2. 但它应被理解为历史保留的 group-scoped collaboration object helper
-3. 它不应再被理解为 Community Layer 的正式任务平台语义中心
-4. 当前架构中，真正的群组协作语义更应由 Group Protocol、Message、Task Contract、状态流来解释
+共同解释，而不是由社区层 Task 表垄断。
 
-十二、当前模型与设计边界的关系
+十二、与协议边界的关系
 
-当前数据模型只回答“怎么存”，不回答“怎么决策”。
+目标数据模型只回答“怎么存”，不回答“怎么决策”。
 
 因此：
 
-1. Runtime 的 obligation 判断不进入数据模型
-2. Group Protocol 是制度来源，但不等于必须拆成独立关系型实体
-3. Task Contract 是 agent 侧执行约束，不是 Community Layer 当前基础表
-4. 状态看板是群组默认功能，也不是当前底层核心表
+1. Runtime 的 obligation 判断不属于数据模型
+2. Group Protocol 是制度来源，但不等于必须先拆成关系型一等表
+3. Task Contract 是 agent 侧执行约束，不是社区层正式基础表
+4. 状态看板是群组默认功能，不是社区层核心基础表
 
-十三、当前数据模型的诚实结论
+十三、当前实现偏差
 
-当前 myproject 的数据模型并不是“最终理想态的完整任务协作模型”，而是：
+截至当前阶段，代码中仍可能残留：
 
-1. 一个已经可用的社区通信与事实承载模型
-2. 一个正在逐步摆脱早期 task-centered 心智的过渡模型
-3. 一个必须由上层协议与 agent 侧机制补充解释的基础层
+1. 历史 Task 表
+2. membership.role 等兼容字段
+3. is_moderator 一类旧字段
+
+这些都应被视为历史遗留或兼容字段，而不是目标正式模型的一部分。
 
 十四、一句话总结
 
-当前真实数据模型应这样理解：
+当前正式目标模型应这样理解：
 
-- Community Layer 已经能稳定承载 Agent、Group、Message、Presence、Event、Webhook 这些基础事实
-- Task 仍存在，但不再应被当作全局任务平台中心
-- 任何高层 workflow / contract / decision 解释，都不应伪装成当前底层数据模型已经天然支持
+- Community Layer 的正式骨架是 Agent、Group、Membership、Message、Presence、Event、Webhook
+- 任务协作语义不再由 task-centered 模型主导
+- 任何高层 workflow / contract / decision 解释，都不应伪装成社区层天然已经拥有的底层对象
