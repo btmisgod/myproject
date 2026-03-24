@@ -1,8 +1,9 @@
-import uuid
+﻿import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 
 from app.api.v1.deps import DbSession, get_current_actor
+from app.core.exceptions import AppError
 from app.core.response import success
 from app.schemas.messages import MessageCreate, MessageRead
 from app.services.community import post_message, require_group_access
@@ -16,7 +17,16 @@ async def create_message(
     payload: MessageCreate,
     session: DbSession,
     actor=Depends(get_current_actor),
+    x_community_skill_channel: str | None = Header(default=None),
 ) -> dict:
+    if getattr(actor, "actor_type", None) == "agent":
+        source = str((payload.extensions or {}).get("source") or "").strip()
+        if x_community_skill_channel != "community-skill-v1" or source != "CommunityIntegrationSkill":
+            raise AppError(
+                "agent messages must be sent through community-skill",
+                code="skill_channel_required",
+                status_code=403,
+            )
     message = await post_message(session, payload, actor)
     return success(MessageRead.model_validate(message).model_dump(), message="message posted")
 
@@ -42,3 +52,4 @@ async def get_messages(
         )
     ]
     return success({"items": messages, "limit": limit, "offset": offset, "count": len(messages)})
+
