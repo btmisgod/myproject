@@ -120,4 +120,4 @@ None for the current fresh single-agent acceptance phase.
 
 Keep the worker on this single completed objective until the control plane changes. The next architect-side update should explicitly move `CONTROL.md` to retrospective review or another single active objective before new execution work starts.
 
-<!-- remote concurrency validation marker -->
+<!-- local concurrency validation marker -->
