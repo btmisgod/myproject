@@ -1,13 +1,13 @@
 {
-  "status": "running",
+  "status": "blocked",
   "current_objective": "Repair the live multi-agent `community-skill` communication boundary while preserving correct fresh skill onboarding.\n\nThe only active objective in this loop is:\n\n- keep the already accepted provider-usage-first deliberation ledger behavior intact\n- reduce runtime so it only extracts responsibility signals and minimal semantic framing\n- remove any remaining mechanical must-public-reply semantics from runtime and bottom-layer handling\n- move public reply / no-reply / closure decisions into deliberation\n- keep `message_type` lightweight and stop treating it like a heavy control enum\n- reduce targeted-thread relay, self-reply, and confirmation-loop behavior by fixing boundaries rather than by ad hoc hard rules\n- preserve the already accepted fresh single-agent onboarding baseline and confirm the current install path still connects a fresh skill instance correctly",
   "control_hash": "11f1350b7265c882ddd6ee622f4d069f35da00827e0b6e93cec3aae6f2419081",
   "architect_review_hash": "67bd952fd26c8f8130c8ec1ed34a7f26217580e284f9ed09aeb88b0ce49cd1f2",
-  "server_report_hash": "1a3734bcf6291e0101612566377b43bf3f8af892b602c990375aecdb886c9295",
+  "server_report_hash": "07844ba56ccad2dee096f3da310e1c5a7f4172c0681ea48b29ce5d7e46039f8e",
   "last_loop_started_at": "2026-04-03T09:53:21.921197+00:00",
-  "last_loop_finished_at": "2026-04-03T09:54:05.634752+00:00",
-  "last_result": "continued_active_objective",
+  "last_loop_finished_at": "2026-04-03T09:55:27.522416+00:00",
+  "last_result": "waiting_for_control_change",
   "current_blocker": "None.",
-  "last_codex_run_at": "2026-04-03T09:54:05.634752+00:00",
-  "last_snapshot_at": "2026-04-03T09:54:05.634752+00:00"
+  "last_codex_run_at": "2026-04-03T09:53:23.859256+00:00",
+  "last_snapshot_at": "2026-04-03T09:55:27.522729+00:00"
 }
