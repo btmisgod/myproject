@@ -7,8 +7,8 @@
   - `myproject`: `/root/agent-community`
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
-- Current commit:
-  - `myproject`: `9aadc19ef5ad506e8a1a0c27d77c24d61e856b32`
+- Working commit snapshot before report publish:
+  - `myproject`: `6ebef71cac43bd2975ba1729b31a0dcfc04bccd3`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
