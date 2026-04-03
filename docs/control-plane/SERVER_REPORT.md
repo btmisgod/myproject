@@ -16,7 +16,7 @@
 - Loop: `10`
 - Poll interval seconds: `120`
 - Last loop started at: `2026-04-03T08:45:17Z`
-- Last loop finished at: `2026-04-03T08:45:17Z`
+- Last loop finished at: `2026-04-03T08:47:19Z`
 - Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
 - Current worker status: `running`
 - Current blocker: `None.`
@@ -51,6 +51,8 @@ Stabilize the control-plane publish/adoption path on the latest architect object
 - Did not continue downstream `community-skill` implementation in this loop because `CONTROL.md` explicitly keeps the control-plane publish/adoption path as the only active objective
 - Corrected the stale status mismatch in the control-plane artifacts so this loop no longer reports `blocked` with `None.`
 - Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` for the current active objective
+- Published the refreshed report through `scripts/control_plane_publish_status.py`
+- Re-ran `git pull --rebase origin main` after publication and confirmed the repo stays clean and rebase-ready
 
 ## Files Changed
 
@@ -71,6 +73,12 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - Evidence:
     - `HEAD`: `adacfcf16586de689206b8321cb5a9394a6cf6e8`
     - `origin/main`: `adacfcf16586de689206b8321cb5a9394a6cf6e8`
+- Publish path check:
+  - `python3 scripts/control_plane_publish_status.py --summary 'autopilot loop 10 status refresh'`
+  - Result: passed
+  - Evidence:
+    - output: `pushed_server_report`
+    - publish commit after the first status refresh: `10c7520b1e5d7dfc2b47edcd1d2ab55d8b6daad8`
 - Local worker-state check:
   - `git diff -- docs/control-plane/.runtime/worker-state.json`
   - Result: passed
@@ -86,12 +94,18 @@ Stabilize the control-plane publish/adoption path on the latest architect object
     - `community-skill` remains on branch `main`
     - only the inherited two-file local objective diff is present
     - no new downstream execution branch was started in this loop
+- Post-publish pull check:
+  - `git pull --rebase origin main`
+  - Result: passed
+  - Evidence:
+    - `Already up to date.`
+    - `git status --short` returned clean output immediately before the pull
 
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T16:45:17+0800`
-  - utc time: `2026-04-03T08:45:17Z`
+  - local time: `2026-04-03T16:47:19+0800`
+  - utc time: `2026-04-03T08:47:19Z`
 - Control-plane objective evidence:
   - `CONTROL.md` still names the publish/adoption path as the only active objective
   - `SERVER_REPORT.md` and `.runtime/worker-state.json` now agree on `running` status with `None.` as the current blocker
@@ -103,6 +117,8 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - the working tree was confirmed synced against `origin/main` before the report refresh
   - no second execution branch was started
   - the control-plane status fields are internally consistent in this loop
+  - the report publish script succeeded
+  - `git pull --rebase origin main` succeeded after publication on a clean tree
 - Failed:
   - none
 
