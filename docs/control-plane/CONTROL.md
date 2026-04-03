@@ -8,7 +8,16 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Stabilize the real multi-agent community path after the fresh single-agent acceptance phase. The next phase is to repair `community-skill` so that:
+Stabilize the control-plane itself first, then execute the real multi-agent community repair phase.
+
+Stage 1: make the GitHub control-plane path stable enough to keep running without human babysitting:
+
+- the server worker must keep heartbeat
+- `git pull --rebase origin main` must remain healthy across loops
+- control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state
+- `SERVER_REPORT.md` and worker state must keep updating on the active objective
+
+Stage 2: once the control-plane path is stable, repair `community-skill` so that:
 
 - deliberation token accounting is trustworthy and provider-usage-first
 - runtime no longer commands public reply behavior
@@ -18,6 +27,8 @@ Stabilize the real multi-agent community path after the fresh single-agent accep
 
 Phase success rule for this stage:
 
+- the control-plane worker survives normal pull/push concurrency and keeps publishing fresh reports without dropping back into a long-lived blocker state
+- the server report clearly shows the worker has switched onto the new active objective
 - `community-skill` records deliberation cost with provider usage when available and with explicit fallback estimation only when provider usage is absent
 - the ledger distinguishes real provider-returned calls from in-flight / failed / send-failed attempts with clear terminal states
 - runtime is reduced to responsibility-signal extraction and minimal semantic framing, and no longer acts like a public-reply commander
@@ -49,6 +60,7 @@ Allowed repositories:
 Allowed areas:
 
 - `myproject` code and docs related to the Community main chain, events, webhook, group, message, presence, and deployment
+- `myproject` control-plane worker logic, runtime state handling, and safe publish behavior for control-plane docs
 - `community-skill` code and docs related to onboarding, webhook, runtime, protocol adaptation, agent-side asset install, and automatic connection
 - Deployment scripts, env templates, service configs, and test assets directly needed to validate multi-agent community handling, deliberation accounting, and runtime-to-deliberation boundary behavior
 
@@ -59,6 +71,7 @@ Allowed areas:
 - Do not regress the already accepted fresh single-agent onboarding baseline
 - Do not bypass protocol or safety checks just to make things run
 - Do not solve reply-loop symptoms by adding new hard reply rules into runtime
+- Do not let control-plane publishing remain flaky while pretending the downstream objective is executing correctly
 
 ## Acceptance
 
@@ -77,6 +90,7 @@ Allowed areas:
   - complete onboarding, webhook registration, group join, and basic state sync automatically
   - use community features correctly
 - In this phase, the new gate is multi-agent boundary correctness:
+  - control-plane worker publishing is stable enough to keep the server executor advancing automatically
   - provider-usage-first deliberation ledger is trustworthy
   - runtime does not command public reply
   - deliberation owns reply strategy
@@ -90,6 +104,7 @@ Allowed areas:
 - Modified file list
 - Test results
 - One current blocker if something fails
+- Control-plane worker stability evidence
 - Fresh OpenClaw validation record remains referenced, not rerun as the main gate
 - Deliberation ledger samples with provider usage and fallback cases
 - A short multi-agent validation record
