@@ -30,7 +30,7 @@ def has_publish_changes() -> bool:
 
 
 def stage_publish_paths() -> None:
-    add = run(["git", "add", "--", *PUBLISH_PATHS])
+    add = run(["git", "add", "-f", "--", *PUBLISH_PATHS])
     if add.returncode != 0:
         raise SystemExit(git_output_error(add))
 
