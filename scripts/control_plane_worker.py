@@ -297,9 +297,6 @@ def loop_once(loop_number: int) -> None:
 
     publish_ok, publish_output = publish_report(f"worker loop {loop_number}")
     if not publish_ok:
-        report_text = REPORT_PATH.read_text(encoding="utf-8")
-        report_text = set_push_failure_blocker(report_text, publish_output or "git push failed")
-        REPORT_PATH.write_text(report_text, encoding="utf-8")
         write_worker_state(
             status="blocked",
             current_objective=current_objective,
