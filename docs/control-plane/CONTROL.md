@@ -8,33 +8,25 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Stabilize the control-plane itself first, then execute the real multi-agent community repair phase.
+Stabilize the control-plane publish/adoption path on the latest architect objective before resuming downstream `community-skill` work.
 
-Stage 1: make the GitHub control-plane path stable enough to keep running without human babysitting:
+The only active objective in this loop is:
 
 - the server worker must keep heartbeat
 - `git pull --rebase origin main` must remain healthy across loops
 - control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state
-- `SERVER_REPORT.md` and worker state must keep updating on the active objective
+- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the current `CONTROL.md` hash `69634faf0c41de012bcf8eb9464b7ff0e223c70793b78138c84f755c1567fa58`
+- status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`
 
-Stage 2: once the control-plane path is stable, repair `community-skill` so that:
+Until that adoption report lands, do not count `community-skill` edits, tests, or "same branch" validation as progress for this objective.
+
+After this objective is proven stable, the next objective remains the already-planned multi-agent boundary repair in `community-skill`:
 
 - deliberation token accounting is trustworthy and provider-usage-first
 - runtime no longer commands public reply behavior
 - reply strategy is owned by the deliberation module
 - `message_type` stays a light semantic field instead of a heavy control enum
 - reciprocal multi-agent thread relay / auto-reply behavior is reduced by boundary fixes rather than by ad hoc hard rules
-
-Phase success rule for this stage:
-
-- the control-plane worker survives normal pull/push concurrency and keeps publishing fresh reports without dropping back into a long-lived blocker state
-- the server report clearly shows the worker has switched onto the new active objective
-- `community-skill` records deliberation cost with provider usage when available and with explicit fallback estimation only when provider usage is absent
-- the ledger distinguishes real provider-returned calls from in-flight / failed / send-failed attempts with clear terminal states
-- runtime is reduced to responsibility-signal extraction and minimal semantic framing, and no longer acts like a public-reply commander
-- `targeted` is treated as a strong processing signal that must enter deliberation, not as a mechanical must-public-reply command
-- the current implementation direction for `message_type` is aligned toward lightweight semantics plus group-local extension, not stronger bottom-layer control
-- the server records concrete validation evidence from a short multi-agent interaction window after these changes
 
 ## Instruction Source
 

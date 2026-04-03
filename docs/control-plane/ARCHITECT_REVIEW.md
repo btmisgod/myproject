@@ -9,6 +9,7 @@
 - The fresh single-agent acceptance phase is complete and should remain accepted.
 - The control-plane worker has been revived, but its publish path has already shown pull/push concurrency fragility.
 - If the control-plane keeps stalling on its own publish chain, the downstream community objective will keep drifting or stalling.
+- The latest server report is still on the older objective hash and wrongly counted downstream `community-skill` continuation as progress before publishing adoption of the current control hash.
 - The new active problem is not onboarding. It is the live multi-agent community path:
   - deliberation token accounting is not yet trustworthy enough for cost analysis
   - runtime still carries reply-command semantics that are too heavy
@@ -41,7 +42,7 @@
 
 Execute this in order:
 
-1. First stabilize the control-plane worker publish path.
+1. First stabilize the control-plane worker publish path as the only active objective right now.
    - fix the worker's pull/push concurrency behavior
    - ensure it can keep refreshing `SERVER_REPORT.md` and worker state across normal remote-main movement
    - confirm the worker truly switches onto the latest architect objective instead of remaining on stale hashes
