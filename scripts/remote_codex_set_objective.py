@@ -25,7 +25,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.objective_file:
-        payload = json.loads(Path(args.objective_file).read_text(encoding="utf-8"))
+        payload = json.loads(Path(args.objective_file).read_text(encoding="utf-8-sig"))
         payload["updated_at"] = utc_now()
     else:
         required = {
