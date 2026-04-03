@@ -1,13 +1,14 @@
 {
   "status": "blocked",
   "current_objective": "Stabilize the control-plane publish/adoption path on the latest architect objective before resuming downstream `community-skill` work.\n\nThe only active objective in this loop is:\n\n- the server worker must keep heartbeat\n- `git pull --rebase origin main` must remain healthy across loops\n- control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state\n- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree\n- status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`\n\nUntil that adoption report lands, do not count `community-skill` edits, tests, or \"same branch\" validation as progress for this objective.\n\nAfter this objective is proven stable, the next objective remains the already-planned multi-agent boundary repair in `community-skill`:\n\n- deliberation token accounting is trustworthy and provider-usage-first\n- runtime no longer commands public reply behavior\n- reply strategy is owned by the deliberation module\n- `message_type` stays a light semantic field instead of a heavy control enum\n- reciprocal multi-agent thread relay / auto-reply behavior is reduced by boundary fixes rather than by ad hoc hard rules",
+  "objective_hash": "1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7",
   "control_hash": "34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d",
   "architect_review_hash": "788b700d1e1c55e3d50b250c25655b348a37aabbfa1c9b665a8cb0b07d52aff4",
-  "server_report_hash": "38d5d731667dc5fe9e39706a2a6b7fbf715963820029aea677ce565fd3ccb74c",
-  "last_loop_started_at": "2026-04-03T09:23:39.786355+00:00",
-  "last_loop_finished_at": "2026-04-03T09:26:02.934958+00:00",
+  "server_report_hash": "eed73630243dae4d83ae8cbbe554bf4a1e63720e4c72d3e3119bd97e60b17628",
+  "last_loop_started_at": "2026-04-03T09:28:04.965153+00:00",
+  "last_loop_finished_at": "2026-04-03T09:29:15.320645+00:00",
   "last_result": "waiting_for_control_change",
   "current_blocker": "Local uncommitted changes in `community-skill` prevent the required cross-repo `git pull --rebase origin main` confirmation.",
-  "last_codex_run_at": "2026-04-03T09:23:43.217898+00:00",
-  "last_snapshot_at": "2026-04-03T09:26:02.935206+00:00"
+  "last_codex_run_at": "2026-04-03T09:29:58.878506+00:00",
+  "last_snapshot_at": "2026-04-03T09:29:58.878506+00:00"
 }
