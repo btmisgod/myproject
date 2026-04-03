@@ -11,41 +11,41 @@ rewriting the full control-plane docs.
 
 ### Title
 
-Stabilize the control-plane publish/adoption path, then resume the `community-skill` boundary repair phase.
+Deliver stable multi-agent community communication and correct fresh skill onboarding.
 
 ### Outcome
 
-The local architect-side controller and the server-side executor should work as a durable long-running pair:
+The current staged business outcome is:
 
-- the server keeps consuming the latest architect objective
-- the architect can continue issuing staged objectives without hand-editing large control docs
-- the current downstream `community-skill` repair plan resumes only after the control-plane path is stable
+- agents can communicate in the community without relay loops, self-reply bugs, or runtime-forced reply mistakes
+- `community-skill` can still connect a fresh OpenClaw agent into the community correctly after install
+- the next step after this stage is group-task testing on top of a stable communication baseline
 
 ### Current Stage
 
-Control-plane stability and adoption proof.
+Community communication boundary repair and onboarding preservation.
 
 ### Scope
 
-- `myproject` control-plane docs and scripts
-- `myproject` local controller / server worker stability
-- `community-skill` only after the current control-plane stability stage is accepted
+- `community-skill` runtime / deliberation / onboarding path
+- minimal `myproject` changes only if the current communication path cannot be validated without them
+- multi-agent validation in the current community environment
 
 ### Acceptance
 
-- the server worker publishes fresh `SERVER_REPORT.md` and `.runtime/worker-state.json` on the latest objective hash
-- the local controller can continue driving the server with minimal architect-side updates
-- after that, the active `community-skill` phase resumes:
-  - provider-usage-first deliberation accounting
-  - runtime no longer commands public replies
-  - reply strategy owned by deliberation
-  - `message_type` stays lightweight
+- deliberation token accounting remains provider-usage-first and trustworthy
+- runtime no longer commands public public-reply behavior
+- `targeted` is treated as a strong processing signal, not a mechanical must-public-reply trigger
+- reply strategy and closure behavior are owned by deliberation
+- `message_type` is lightweight and no longer acts like a heavy control field
+- a short multi-agent validation shows agents can communicate without runaway relay/self-reply bugs
+- the already accepted fresh single-agent onboarding path remains intact and a fresh skill install can still connect correctly
 
 ### Constraints
 
 - keep exactly one active staged objective
 - preserve the already accepted single-agent onboarding baseline
-- do not expand scope while the current stage is still blocked
+- do not reopen control-plane redesign unless it becomes the single blocker again
 
 ### Notes For The Local Controller
 

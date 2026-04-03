@@ -7,14 +7,13 @@
 ## Architecture Judgment
 
 - The fresh single-agent acceptance phase is complete and should remain accepted.
-- The control-plane worker has been revived, but its publish path has already shown pull/push concurrency fragility.
-- If the control-plane keeps stalling on its own publish chain, the downstream community objective will keep drifting or stalling.
-- The latest server report is still on the older objective hash and wrongly counted downstream `community-skill` continuation as progress before publishing adoption of the current staged objective contract and control hashes.
+- The server-side long-running worker is now stable enough to continue downstream work.
+- Provider-usage-first deliberation accounting has been completed and should now be treated as accepted baseline for this phase.
 - The new active problem is not onboarding. It is the live multi-agent community path:
-  - deliberation token accounting is not yet trustworthy enough for cost analysis
   - runtime still carries reply-command semantics that are too heavy
   - `targeted` still behaves too much like a must-public-reply trigger
   - `message_type` is still heavier than the intended lightweight semantic role
+  - targeted threads can still relay or loop across multiple agents
 - No rollback is needed for the already accepted onboarding and single-agent baseline fixes.
 - The next phase should tighten boundaries instead of adding more runtime rules.
 - Provider usage returned by the model service should be the primary accounting source because reading returned usage does not add prompt token cost.
@@ -27,6 +26,7 @@
 - JSON-safe message protocol serialization is accepted.
 - Fresh-install onboarding, runtime installation, and first targeted execution recovery are accepted as current-phase progress.
 - Fresh single-agent acceptance is accepted as phase-complete.
+- Provider-usage-first deliberation ledger with explicit terminal states is accepted as phase-complete.
 
 ## Rejected / Out-of-Scope Changes
 
@@ -42,48 +42,32 @@
 
 Execute this in order:
 
-1. First stabilize the control-plane worker publish path as the only active objective right now.
-   - fix the worker's pull/push concurrency behavior
-   - ensure it can keep refreshing `SERVER_REPORT.md` and worker state across normal remote-main movement
-   - confirm the worker truly switches onto the latest architect objective instead of remaining on stale hashes
-   - on the next successful loop, publish a fresh report that explicitly carries the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree before resuming downstream code work
-   - until that fresh report lands, do not continue `community-skill` edits, tests, or "same branch" validation as progress; stale-hash continuation is a control-plane blocker
-   - if `docs/control-plane/.runtime/worker-state.json` is missing at loop start, recreate it and treat failure to recreate or publish it as the single blocker instead of continuing silently
-   - if publish still fails, if the report remains on an old objective hash after a retry loop, or if status text still contradicts itself (`blocked` with `None.`, or `blocked` while claiming the worker remains `running`), record that publish-path failure as the single blocker in `SERVER_REPORT.md`
-
-2. Then start the accounting and boundary foundation, not a large loop-repair branch:
-
-- keep the already accepted fresh single-agent acceptance record intact
-- first repair deliberation accounting in `community-skill`
-  - use provider-returned `usage` as the primary source
-  - keep local module-level estimates only as fallback when provider usage is absent
-  - distinguish explicit terminal states instead of mixing real calls and pending skeletons
-- then reduce runtime semantics
-  - runtime should extract responsibility signals and minimal semantic framing only
-  - runtime should not act like a public-reply commander
-  - `targeted` should mean strong processing signal that must enter deliberation, not a mechanical must-public-reply command
-- keep reply-strategy decisions inside the deliberation module
-- move `message_type` toward lightweight semantic use plus group-local extension, not stronger bottom-layer control
-- after those code changes, run a short multi-agent validation window and record:
-  - provider usage vs fallback ledger behavior
-  - runtime output shape
-  - deliberation outcome
-  - whether the targeted thread still relays excessively
+1. Continue the active `community-skill` boundary repair branch.
+   - keep the accepted ledger behavior intact
+   - reduce runtime to responsibility-signal extraction and minimal semantic framing only
+   - remove any remaining must-public-reply semantics from runtime and bottom-layer handling
+   - treat `targeted` as a strong processing signal that must enter deliberation, not a mechanical reply command
+   - keep reply strategy and closure behavior inside deliberation
+   - move `message_type` toward lightweight semantic use plus group-local extension, not stronger bottom-layer control
+2. After those code changes, run a short multi-agent validation window and record:
+   - runtime output shape
+   - deliberation outcome
+   - whether targeted threads still relay excessively
+   - whether self-reply / confirmation-loop behavior is gone or materially reduced
+3. Then do one focused preservation check on fresh skill onboarding:
+   - confirm a fresh install still connects the skill to the community correctly
+   - do not reopen onboarding redesign unless this preservation check fails
 
 Do not reopen the already-completed onboarding gate as the main phase driver.
 
 ## Prompt Delta
 
-The next server prompt should do two things in sequence. First, stabilize the control-plane worker's own publish path so it no longer falls back into pull/push blockers during normal remote-main concurrency. Second, once the worker is proven stable on the latest objective, switch from fresh single-agent acceptance to multi-agent boundary repair with accounting first. It should instruct the server to:
+The next server prompt should continue the now-active business branch. It should instruct the server to:
 
-- repair worker pull/push retry behavior and verify fresh `SERVER_REPORT.md` publication on the latest architect objective
-- make the next published report prove adoption of the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree
-- stop downstream `community-skill` continuation until that adoption report exists; stale-hash continuation is not acceptable progress
-- recreate and publish `docs/control-plane/.runtime/worker-state.json` if it is absent in the working tree
-- if the worker cannot publish that state, remains on an older objective hash after retry, or publishes contradictory status fields, write that publish-path failure as the single blocker clearly
-- implement provider-usage-first deliberation accounting with explicit terminal states
-- keep module-level token breakdown as local fallback only
+- preserve the already accepted provider-usage-first ledger behavior
 - reduce runtime so it no longer commands public reply behavior
 - move reply-strategy ownership into the deliberation module
+- change `targeted` from a mechanical reply trigger into a strong processing signal that enters deliberation
 - keep `message_type` lightweight
-- validate these changes with a short controlled multi-agent interaction window and record the evidence
+- validate the new boundary with a short controlled multi-agent interaction window
+- then run one focused preservation check to ensure fresh skill onboarding still connects correctly

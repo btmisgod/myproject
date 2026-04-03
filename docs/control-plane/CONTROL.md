@@ -8,25 +8,17 @@ After both are complete, run a retrospective review. If the review is clean, end
 
 ## Current Active Objective
 
-Stabilize the control-plane publish/adoption path on the latest architect objective before resuming downstream `community-skill` work.
+Repair the live multi-agent `community-skill` communication boundary while preserving correct fresh skill onboarding.
 
 The only active objective in this loop is:
 
-- the server worker must keep heartbeat
-- `git pull --rebase origin main` must remain healthy across loops
-- control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state
-- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree
-- status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`
-
-Until that adoption report lands, do not count `community-skill` edits, tests, or "same branch" validation as progress for this objective.
-
-After this objective is proven stable, the next objective remains the already-planned multi-agent boundary repair in `community-skill`:
-
-- deliberation token accounting is trustworthy and provider-usage-first
-- runtime no longer commands public reply behavior
-- reply strategy is owned by the deliberation module
-- `message_type` stays a light semantic field instead of a heavy control enum
-- reciprocal multi-agent thread relay / auto-reply behavior is reduced by boundary fixes rather than by ad hoc hard rules
+- keep the already accepted provider-usage-first deliberation ledger behavior intact
+- reduce runtime so it only extracts responsibility signals and minimal semantic framing
+- remove any remaining mechanical must-public-reply semantics from runtime and bottom-layer handling
+- move public reply / no-reply / closure decisions into deliberation
+- keep `message_type` lightweight and stop treating it like a heavy control enum
+- reduce targeted-thread relay, self-reply, and confirmation-loop behavior by fixing boundaries rather than by ad hoc hard rules
+- preserve the already accepted fresh single-agent onboarding baseline and confirm the current install path still connects a fresh skill instance correctly
 
 ## Instruction Source
 
@@ -65,7 +57,7 @@ Allowed areas:
 - Do not regress the already accepted fresh single-agent onboarding baseline
 - Do not bypass protocol or safety checks just to make things run
 - Do not solve reply-loop symptoms by adding new hard reply rules into runtime
-- Do not let control-plane publishing remain flaky while pretending the downstream objective is executing correctly
+- Do not reopen control-plane redesign unless it becomes the single blocker again
 
 ## Acceptance
 
@@ -84,11 +76,11 @@ Allowed areas:
   - complete onboarding, webhook registration, group join, and basic state sync automatically
   - use community features correctly
 - In this phase, the new gate is multi-agent boundary correctness:
-  - control-plane worker publishing is stable enough to keep the server executor advancing automatically
   - provider-usage-first deliberation ledger is trustworthy
   - runtime does not command public reply
   - deliberation owns reply strategy
   - multi-agent thread behavior is validated against the new boundary
+  - fresh skill onboarding still works correctly after the boundary changes
 - A retrospective review is completed
 - The review finds no remaining critical issue for this task cycle
 
@@ -102,6 +94,7 @@ Allowed areas:
 - Fresh OpenClaw validation record remains referenced, not rerun as the main gate
 - Deliberation ledger samples with provider usage and fallback cases
 - A short multi-agent validation record
+- Fresh skill install / onboarding preservation evidence
 - Final retrospective summary
 
 ## Polling
