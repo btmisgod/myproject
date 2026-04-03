@@ -56,10 +56,57 @@ $env:REMOTE_CODEX_SERVER_URL="http://<server-ip>:18789"
 $env:REMOTE_CODEX_SERVER_TOKEN="<token>"
 ```
 
-Write the long-running objective:
+Write a single-phase objective quickly:
 
 ```powershell
 python scripts\remote_codex_set_objective.py --title "..." --goal "..." --stage "..." --scope item1 item2 --acceptance item1 item2 --constraints item1 item2
+```
+
+Write a real multi-phase long-running objective from JSON:
+
+```powershell
+python scripts\remote_codex_set_objective.py --objective-file .\objective.json
+```
+
+Example `objective.json`:
+
+```json
+{
+  "title": "Stabilize community communication and onboarding",
+  "goal": "Agents should communicate cleanly in the community and a fresh skill install should onboard correctly.",
+  "phases": [
+    {
+      "phase_id": "phase-1-runtime-boundary",
+      "title": "Fix runtime and reply boundary bugs",
+      "goal": "Remove forced public replies and suppress self-reply/relay loops.",
+      "scope": ["community-skill", "runtime", "deliberation"],
+      "acceptance": [
+        "No mechanically forced public reply in the targeted path",
+        "No self-reply or relay loop in focused short-window tests"
+      ],
+      "constraints": [
+        "Preserve provider-usage-first token ledger"
+      ],
+      "notes": ""
+    },
+    {
+      "phase_id": "phase-2-onboarding",
+      "title": "Preserve fresh-install onboarding",
+      "goal": "A fresh community-skill install should onboard correctly on the preserved baseline.",
+      "scope": ["community-skill", "onboarding"],
+      "acceptance": [
+        "Fresh install onboarding succeeds",
+        "Accepted single-agent onboarding behavior remains passing"
+      ],
+      "constraints": [
+        "Do not regress completed phase behavior"
+      ],
+      "notes": ""
+    }
+  ],
+  "current_phase_index": 0,
+  "phase_history": []
+}
 ```
 
 Start the local architect loop:

@@ -4,6 +4,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 from urllib import error, request
 
 from remote_codex_common import ensure_dir, load_json, read_text, run_command, save_json, summarize_completed, utc_now
@@ -37,20 +38,86 @@ def http_request(method: str, path: str, payload: dict | None = None) -> dict:
 
 
 def write_state(status: str, blocker: str | None = None) -> None:
-    save_json(
-        STATE_PATH,
+    current = load_json(STATE_PATH, {})
+    current.update(
         {
             "status": status,
             "blocker": blocker,
             "updated_at": utc_now(),
-        },
+        }
     )
+    save_json(STATE_PATH, current)
+
+
+def normalize_objective(raw: dict[str, Any]) -> dict[str, Any]:
+    if not raw:
+        return {}
+    if raw.get("phases"):
+        phases = raw["phases"]
+    else:
+        phase_id = str(raw.get("stage") or "phase-1")
+        phases = [
+            {
+                "phase_id": phase_id,
+                "title": str(raw.get("title") or phase_id),
+                "goal": str(raw.get("goal") or ""),
+                "scope": list(raw.get("scope") or []),
+                "acceptance": list(raw.get("acceptance") or []),
+                "constraints": list(raw.get("constraints") or []),
+                "notes": str(raw.get("notes") or ""),
+            }
+        ]
+    return {
+        "title": str(raw.get("title") or phases[0].get("title") or "Untitled objective"),
+        "goal": str(raw.get("goal") or ""),
+        "phases": phases,
+        "current_phase_index": int(raw.get("current_phase_index") or 0),
+        "phase_history": list(raw.get("phase_history") or []),
+        "updated_at": str(raw.get("updated_at") or utc_now()),
+    }
+
+
+def active_phase(objective: dict[str, Any]) -> dict[str, Any]:
+    phases = objective.get("phases") or []
+    if not phases:
+        return {}
+    index = int(objective.get("current_phase_index") or 0)
+    index = max(0, min(index, len(phases) - 1))
+    return phases[index]
+
+
+def persist_objective(objective: dict[str, Any]) -> None:
+    objective["updated_at"] = utc_now()
+    save_json(OBJECTIVE_PATH, objective)
+
+
+def advance_phase(objective: dict[str, Any], reason: str) -> bool:
+    phases = objective.get("phases") or []
+    index = int(objective.get("current_phase_index") or 0)
+    if index >= len(phases) - 1:
+        return False
+    phase = phases[index]
+    history = list(objective.get("phase_history") or [])
+    history.append(
+        {
+            "phase_id": phase.get("phase_id"),
+            "title": phase.get("title"),
+            "completed_at": utc_now(),
+            "reason": reason,
+        }
+    )
+    objective["phase_history"] = history
+    objective["current_phase_index"] = index + 1
+    persist_objective(objective)
+    return True
 
 
 def build_prompt(objective: dict, server_state: dict, current_task: dict, latest_result: dict) -> str:
     template = read_text(PROMPT_TEMPLATE)
+    phase = active_phase(objective)
     bundle = {
         "objective": objective,
+        "active_phase": phase,
         "server_state": server_state,
         "current_task": current_task,
         "latest_result": latest_result,
@@ -85,11 +152,26 @@ def codex_decide(prompt: str) -> dict:
     return parse_json_message(final_message)
 
 
-def loop_once() -> None:
-    objective = load_json(OBJECTIVE_PATH, {})
+def loop_once() -> bool:
+    objective = normalize_objective(load_json(OBJECTIVE_PATH, {}))
     if not objective:
         write_state("blocked", "missing objective.json")
-        return
+        return False
+    persist_objective(objective)
+    phase = active_phase(objective)
+    write_state("running" if load_json(STATE_PATH, {}).get("status") == "running" else "idle")
+    state_snapshot = load_json(STATE_PATH, {})
+    state_snapshot.update(
+        {
+            "objective_title": objective.get("title"),
+            "current_phase_index": objective.get("current_phase_index"),
+            "current_phase_id": phase.get("phase_id"),
+            "current_phase_title": phase.get("title"),
+            "phase_count": len(objective.get("phases") or []),
+            "updated_at": utc_now(),
+        }
+    )
+    save_json(STATE_PATH, state_snapshot)
     state = http_request("GET", "/api/v1/state").get("state", {})
     current_task = http_request("GET", "/api/v1/task").get("task", {})
     latest_results = http_request("GET", "/api/v1/results?limit=1").get("results", [])
@@ -102,14 +184,31 @@ def loop_once() -> None:
         payload = decision.get("task") or {}
         http_request("POST", "/api/v1/task", payload)
         write_state("running")
-        return
+        return False
     if action == "completed":
+        if advance_phase(objective, str(decision.get("reason") or "phase completed")):
+            next_phase = active_phase(objective)
+            write_state("idle")
+            state_snapshot = load_json(STATE_PATH, {})
+            state_snapshot.update(
+                {
+                    "last_phase_completion_reason": str(decision.get("reason") or ""),
+                    "current_phase_index": objective.get("current_phase_index"),
+                    "current_phase_id": next_phase.get("phase_id"),
+                    "current_phase_title": next_phase.get("title"),
+                    "phase_count": len(objective.get("phases") or []),
+                    "updated_at": utc_now(),
+                }
+            )
+            save_json(STATE_PATH, state_snapshot)
+            return True
         write_state("completed")
-        return
+        return False
     if action == "blocked":
         write_state("blocked", str(decision.get("reason") or "architect marked blocked"))
-        return
+        return False
     write_state("idle")
+    return False
 
 
 def main() -> int:
@@ -119,11 +218,15 @@ def main() -> int:
         return 1
     while True:
         try:
-            loop_once()
+            immediate_continue = loop_once()
         except error.HTTPError as exc:
             write_state("blocked", f"http_error: {exc.code}")
+            immediate_continue = False
         except Exception as exc:  # noqa: BLE001
             write_state("blocked", str(exc))
+            immediate_continue = False
+        if immediate_continue:
+            continue
         if RUN_ONCE:
             return 0
         time.sleep(POLL_SECONDS)
