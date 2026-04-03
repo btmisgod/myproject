@@ -20,12 +20,14 @@
 
 ## Autopilot Heartbeat
 
+- Loop: `1`
 - Poll interval seconds: `120`
+- Last loop started at: `2026-04-03T04:43:30.363083+00:00`
+- Last loop finished at: `2026-04-03T04:45:53.397333+00:00`
 - Current objective hash: `573a7f3d58f460c01518ec6cae26e5f018e97472c7e985558bfb645ba0121af6`
-- Current worker status: `completed`
-- Current blocker: `none`
+- Current worker status: `blocked`
+- Current blocker: `None for the current fresh single-agent acceptance phase.`
 - Codex objective step ran this loop: `true`
-
 ## Phase Summary
 
 - phase_success: `true`
