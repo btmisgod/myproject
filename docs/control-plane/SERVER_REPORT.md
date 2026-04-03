@@ -8,24 +8,25 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `985572d3ef47c53b9d8f47ba691d74b2d473ac1d`
+  - `myproject`: `c0a9143d90e58f3394f5d2f7038cdf01878cce94`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
 
-- Loop: `14`
+- Loop: `15`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-04-03T09:57:29.545589+00:00`
-- Last loop finished at: `2026-04-03T10:00:32.991951+00:00`
+- Last loop started at: `2026-04-03T10:02:34.946269+00:00`
+- Last loop finished at: `2026-04-03T10:03:31.470925Z`
 - Current objective hash: `11f1350b7265c882ddd6ee622f4d069f35da00827e0b6e93cec3aae6f2419081`
-- Current worker status: `blocked`
+- Current worker status: `running`
 - Current blocker: `None.`
 - Codex objective step ran this loop: `true`
+
 ## Phase Summary
 
 - phase_success: `true`
 - active_phase: `community-skill communication boundary validation`
-- validation_checkpoint: `the same single active boundary branch remains unblocked after a minimal lightweight-message_type fix and the focused runtime/deliberation suite still passes`
+- validation_checkpoint: `the same single active boundary branch remains unblocked and the focused runtime-deliberation suite still passes without adding a new branch`
 
 ## Current Active Objective
 
@@ -48,17 +49,18 @@ Repair the live multi-agent `community-skill` communication boundary while prese
   - `scripts/community_integration.mjs`
   - `tests/community-skill-outbound-v2.test.mjs`
   - `scripts/community-deliberation-ledger-cli.mjs`
-- Continued the same active branch with one minimal boundary-aligned change:
-  - relaxed outbound `message_type` normalization so sanitized lightweight labels are preserved instead of being forced through a fixed enum-style allowlist
-  - added a focused test proving canonical outbound message building preserves a custom lightweight `message_type`
+- Revalidated the same active branch instead of starting a new one:
+  - kept the current provider-usage-first deliberation ledger work in place
+  - kept the lightweight outbound `message_type` handling in place
+  - kept reply / no-reply decisions in deliberation rather than moving them back into runtime
 - Ran the focused runtime/deliberation suite on the active branch
 - Confirmed the active branch remains unblocked:
-  - required targeted intake reaches deliberation and posts reply
-  - optional collaboration reaches deliberation without forced public reply
-  - provider usage and fallback-estimated ledger paths are both recorded
-  - send failure is preserved as a distinct ledger terminal state
-  - receipt/debug events stay outside normal intake
-  - custom outbound label `coordination note` canonicalizes to `coordination_note` without regressing the focused boundary suite
+  - required targeted intake still reaches deliberation and posts reply
+  - optional collaboration still reaches deliberation without forced public reply
+  - provider usage and fallback-estimated ledger paths are both still recorded
+  - send failure is still preserved as a distinct ledger terminal state
+  - receipt/debug events still stay outside normal intake
+  - the deliberation ledger CLI still returns recent usage records
 - Preserved the same single objective branch for the next loop rather than opening any new branch
 - Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` for this loop
 
@@ -77,8 +79,8 @@ Repair the live multi-agent `community-skill` communication boundary while prese
   - `git rev-parse origin/main`
   - Result: passed
   - Evidence:
-    - `HEAD`: `985572d3ef47c53b9d8f47ba691d74b2d473ac1d`
-    - `origin/main`: `985572d3ef47c53b9d8f47ba691d74b2d473ac1d`
+    - `HEAD`: `c0a9143d90e58f3394f5d2f7038cdf01878cce94`
+    - `origin/main`: `c0a9143d90e58f3394f5d2f7038cdf01878cce94`
 - `community-skill` sync check:
   - `git -C /root/openclaw-33/workspace/skills/community-skill rev-parse HEAD`
   - `git -C /root/openclaw-33/workspace/skills/community-skill rev-parse origin/main`
@@ -111,12 +113,12 @@ Repair the live multi-agent `community-skill` communication boundary while prese
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T17:58:55+0800`
-  - utc time: `2026-04-03T09:58:55.468461Z`
+  - local time: `2026-04-03T18:03:31+0800`
+  - utc time: `2026-04-03T10:03:31.470925Z`
 - Control-plane continuation evidence:
   - the active objective hash is unchanged from the prior loop
   - no new blocker appeared on the current active branch
-  - this loop therefore continued the same branch by making one minimal boundary-aligned `message_type` fix and revalidating the focused suite instead of starting any new direction
+  - this loop therefore continued the same branch by revalidating the focused boundary suite and keeping the current in-progress branch intact instead of starting any new direction
 
 ## Current Status
 
@@ -124,7 +126,8 @@ Repair the live multi-agent `community-skill` communication boundary while prese
   - the loop stayed on the current active `community-skill` communication-boundary objective
   - the active local `community-skill` branch remains singular and unblocked
   - the focused runtime/deliberation suite still passes on the in-progress branch
-  - outbound canonicalization now preserves lightweight custom `message_type` labels after sanitization
+  - the provider-usage-first ledger path and fallback-estimated ledger path remain validated
+  - runtime still avoids forcing public reply in the optional collaboration path
   - the server heartbeat files now match this loop
 - Failed:
   - none in this loop
