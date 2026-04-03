@@ -8,7 +8,7 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `9035fa664a983304d08dbd2005bc30c9bacc706f`
+  - `myproject`: `6eb1867e9fb71d6b70443444bb06d14f22bf03ee`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
@@ -16,7 +16,7 @@
 - Loop: `2`
 - Poll interval seconds: `120`
 - Last loop started at: `2026-04-03T08:55:41Z`
-- Last loop finished at: `2026-04-03T08:55:57Z`
+- Last loop finished at: `2026-04-03T08:58:15Z`
 - Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
 - Current worker status: `running`
 - Current blocker: `None.`
@@ -77,6 +77,12 @@ Stabilize the control-plane publish/adoption path on the latest architect object
     - worker state now carries the current control, architect-review, and objective hashes
     - worker state status remains `running`
     - worker state blocker remains `None.`
+- Publish path check:
+  - `python3 scripts/control_plane_publish_status.py --summary 'autopilot loop 2 status refresh'`
+  - Result: passed
+  - Evidence:
+    - output: `pushed_server_report`
+    - publish commit: `6eb1867e9fb71d6b70443444bb06d14f22bf03ee`
 - Downstream state check:
   - `git -C /root/openclaw-33/workspace/skills/community-skill branch --show-current`
   - `git -C /root/openclaw-33/workspace/skills/community-skill status --short`
@@ -85,12 +91,17 @@ Stabilize the control-plane publish/adoption path on the latest architect object
     - `community-skill` remains on branch `main`
     - only the inherited two-file local objective diff is present
     - no new downstream execution branch was started in this loop
+- Post-publish pull check:
+  - `git pull --rebase origin main`
+  - Result: passed
+  - Evidence:
+    - `Already up to date.`
 
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T16:55:57+0800`
-  - utc time: `2026-04-03T08:55:57Z`
+  - local time: `2026-04-03T16:58:15+0800`
+  - utc time: `2026-04-03T08:58:15Z`
 - Control-plane objective evidence:
   - `CONTROL.md` still names the publish/adoption path as the only active objective
   - this loop continues the same control-plane publish/adoption stabilization branch
@@ -102,7 +113,9 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - the loop followed the unchanged active objective from `CONTROL.md`
   - the working tree was confirmed synced against `origin/main` before the report refresh
   - no second execution branch was started
-  - the control-plane status fields are internally consistent in this loop before publication
+  - the control-plane status fields are internally consistent in this loop
+  - the report publish script succeeded
+  - `git pull --rebase origin main` succeeded after publication on a clean tree
 - Failed:
   - none
 
