@@ -8,15 +8,15 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `3c07dae5007085c3f575787b4374c84b7a0f9a3f`
+  - `myproject`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
 
-- Loop: `7`
+- Loop: `8`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-04-03T09:28:04.965153+00:00`
-- Last loop finished at: `2026-04-03T09:30:44.296580+00:00`
+- Last loop started at: `2026-04-03T09:32:47.657054+00:00`
+- Last loop finished at: `2026-04-03T09:33:24+00:00`
 - Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
 - Current worker status: `blocked`
 - Current blocker: `Local uncommitted changes in `community-skill` prevent the required cross-repo `git pull --rebase origin main` confirmation.`
@@ -37,12 +37,12 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - `docs/control-plane/REPO_INDEX.md`
   - `docs/control-plane/CONTROL.md`
   - `docs/control-plane/OPERATING_RULES.md`
-- Read `docs/designlog/` to confirm the active architecture sources remain unchanged while this loop stays scoped to the control-plane publish/adoption objective
+- Read `docs/designlog/` headers again to confirm the architecture source remains unchanged while this loop stays scoped to the control-plane publish/adoption objective
 - Read the current `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json`
 - Confirmed `OBJECTIVE.md` and `CONTROL.md` from the synced working tree with hashes:
   - `OBJECTIVE.md`: `1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7`
   - `CONTROL.md`: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
-- Confirmed the main repo remains synced at `3c07dae5007085c3f575787b4374c84b7a0f9a3f` for both `HEAD` and `origin/main`
+- Confirmed the main repo remains synced at `7100ac032e7a38aac49f099919f07cb14b545ed6` for both `HEAD` and `origin/main`
 - Confirmed the local `community-skill` worktree still contains:
   - `scripts/community_integration.mjs`
   - `tests/community-skill-outbound-v2.test.mjs`
@@ -50,6 +50,7 @@ Stabilize the control-plane publish/adoption path on the latest architect object
 - Re-ran the required pull-health check and confirmed `community-skill` still rejects `git pull --rebase origin main` while those local edits remain
 - Did not start any downstream `community-skill` execution branch because the active objective remains blocked and `CONTROL.md` did not change
 - Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` together so the published status carries exactly one blocker, matching `blocked` state, and the fresh `OBJECTIVE.md` and `CONTROL.md` hashes
+- Corrected the local runtime-state/report mismatch by moving `docs/control-plane/.runtime/worker-state.json` from stale `running` to `blocked` with the same single blocker recorded here
 
 ## Files Changed
 
@@ -63,8 +64,8 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - `git rev-parse origin/main`
   - Result: passed
   - Evidence:
-    - `HEAD`: `3c07dae5007085c3f575787b4374c84b7a0f9a3f`
-    - `origin/main`: `3c07dae5007085c3f575787b4374c84b7a0f9a3f`
+    - `HEAD`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
+    - `origin/main`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
 - Control-plane hash refresh check:
   - `sha256sum docs/control-plane/OBJECTIVE.md docs/control-plane/CONTROL.md`
   - Result: passed
@@ -94,14 +95,15 @@ Stabilize the control-plane publish/adoption path on the latest architect object
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T17:29:15+08:00`
-  - utc time: `2026-04-03T09:29:15Z`
+  - local time: `2026-04-03T17:33:24+08:00`
+  - utc time: `2026-04-03T09:33:24Z`
 - Control-plane objective evidence:
   - `CONTROL.md` still names the publish/adoption path as the only active objective
   - the control hash is unchanged from the previous loop
   - the objective hash is freshly recomputed from `OBJECTIVE.md` in the synced working tree
   - this loop keeps the same control-plane publish/adoption stabilization branch
   - this loop preserves exactly one blocker and does not start a new branch
+  - this loop fixes the stale local runtime state so published status no longer claims `running` while blocked
 
 ## Current Status
 
@@ -110,6 +112,7 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - no second execution branch was started
   - the current blocker is preserved as exactly one blocker
   - the report and local runtime state are refreshed together with matching `blocked` status
+  - the fresh report/state pair now records the synced-tree hashes and a consistent blocked heartbeat
 - Failed:
   - the required cross-repo `git pull --rebase origin main` confirmation still cannot complete while local uncommitted changes remain in `community-skill`
 
