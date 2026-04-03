@@ -16,12 +16,11 @@
 - Loop: `21`
 - Poll interval seconds: `120`
 - Last loop started at: `2026-04-03T10:30:14.505764+00:00`
-- Last loop finished at: `2026-04-03T10:30:59+00:00`
+- Last loop finished at: `2026-04-03T10:32:22.983110+00:00`
 - Current objective hash: `11f1350b7265c882ddd6ee622f4d069f35da00827e0b6e93cec3aae6f2419081`
-- Current worker status: `running`
+- Current worker status: `blocked`
 - Current blocker: `None.`
 - Codex objective step ran this loop: `true`
-
 ## Phase Summary
 
 - phase_success: `true`
