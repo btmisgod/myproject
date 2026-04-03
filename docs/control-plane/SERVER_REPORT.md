@@ -8,28 +8,29 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
+  - `myproject`: `f29a7b6eb8888d7dae1e388239c10b70d03571d2`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
 
-- Loop: `8`
+- Loop: `9`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-04-03T09:32:47.657054+00:00`
-- Last loop finished at: `2026-04-03T09:34:44.384775+00:00`
-- Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
-- Current worker status: `blocked`
-- Current blocker: `Local uncommitted changes in `community-skill` prevent the required cross-repo `git pull --rebase origin main` confirmation.`
+- Last loop started at: `2026-04-03T09:37:32+00:00`
+- Last loop finished at: `2026-04-03T09:37:32+00:00`
+- Current objective hash: `4b9ad6fbfae33f6f029ff55d59fffd2ce4c489a4e90907d90d23d5e29010ef0f`
+- Current worker status: `running`
+- Current blocker: `none`
 - Codex objective step ran this loop: `true`
+
 ## Phase Summary
 
-- phase_success: `false`
-- active_phase: `control-plane publish/adoption stabilization`
-- validation_checkpoint: `the blocker remains singular, the runtime state matches the report, and publish proceeds with the refreshed report`
+- phase_success: `true`
+- active_phase: `community-skill communication boundary validation`
+- validation_checkpoint: `the current active boundary branch remains singular, passes the focused runtime/deliberation suite, and no blocker is currently active`
 
 ## Current Active Objective
 
-Stabilize the control-plane publish/adoption path on the latest architect objective before resuming downstream `community-skill` work.
+Repair the live multi-agent `community-skill` communication boundary while preserving correct fresh skill onboarding.
 
 ## Work Performed
 
@@ -37,20 +38,28 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - `docs/control-plane/REPO_INDEX.md`
   - `docs/control-plane/CONTROL.md`
   - `docs/control-plane/OPERATING_RULES.md`
-- Read `docs/designlog/` headers again to confirm the architecture source remains unchanged while this loop stays scoped to the control-plane publish/adoption objective
+- Re-read the design-doc headers in `docs/designlog/` to confirm the active objective still matches the accepted architecture:
+  - runtime only extracts responsibility signals and minimum obligation
+  - skill does not own final reply decisions
+  - deliberation owns public reply / no-reply decisions
 - Read the current `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json`
-- Confirmed `OBJECTIVE.md` and `CONTROL.md` from the synced working tree with hashes:
-  - `OBJECTIVE.md`: `1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7`
-  - `CONTROL.md`: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
-- Confirmed the main repo remains synced at `7100ac032e7a38aac49f099919f07cb14b545ed6` for both `HEAD` and `origin/main`
-- Confirmed the local `community-skill` worktree still contains:
+- Confirmed the local worker state was stale for this loop:
+  - `SERVER_REPORT.md` still carried the old publish/adoption blocker
+  - `worker-state.json` still said `running` with an old `control_hash`
+- Checked the current local branch state in `community-skill` and confirmed the only in-progress branch remains the active objective work:
   - `scripts/community_integration.mjs`
   - `tests/community-skill-outbound-v2.test.mjs`
   - `scripts/community-deliberation-ledger-cli.mjs`
-- Re-ran the required pull-health check and confirmed `community-skill` still rejects `git pull --rebase origin main` while those local edits remain
-- Did not start any downstream `community-skill` execution branch because the active objective remains blocked and `CONTROL.md` did not change
-- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` together so the published status carries exactly one blocker, matching `blocked` state, and the fresh `OBJECTIVE.md` and `CONTROL.md` hashes
-- Corrected the local runtime-state/report mismatch by moving `docs/control-plane/.runtime/worker-state.json` from stale `running` to `blocked` with the same single blocker recorded here
+- Inspected the current runtime/deliberation path in `community_integration.mjs`
+- Ran the focused `community-skill` outbound/runtime test suite against the local active branch
+- Confirmed the suite currently validates:
+  - targeted required intake still reaches deliberation and can reply
+  - non-targeted collaboration enters deliberation without forced public reply
+  - ledger records provider-returned usage and fallback-estimated usage
+  - send failure is recorded as a distinct terminal ledger state
+  - receipt/debug events stay outside normal intake
+- Kept scope on the existing active objective branch and did not start any second branch
+- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` to clear the stale blocker and publish the current running heartbeat
 
 ## Files Changed
 
@@ -64,62 +73,60 @@ Stabilize the control-plane publish/adoption path on the latest architect object
   - `git rev-parse origin/main`
   - Result: passed
   - Evidence:
-    - `HEAD`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
-    - `origin/main`: `7100ac032e7a38aac49f099919f07cb14b545ed6`
-- Control-plane hash refresh check:
-  - `sha256sum docs/control-plane/OBJECTIVE.md docs/control-plane/CONTROL.md`
+    - `HEAD`: `f29a7b6eb8888d7dae1e388239c10b70d03571d2`
+    - `origin/main`: `f29a7b6eb8888d7dae1e388239c10b70d03571d2`
+- Control-plane hash check:
+  - `sha256sum docs/control-plane/CONTROL.md docs/control-plane/OPERATING_RULES.md`
   - Result: passed
   - Evidence:
-    - `OBJECTIVE.md`: `1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7`
-    - `CONTROL.md`: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
-- Pull health check:
-  - `git -C /root/openclaw-33/workspace/skills/community-skill pull --rebase origin main`
-  - Result: failed
-  - Evidence:
-    - `community-skill`: `error: cannot pull with rebase: You have unstaged changes.`
-    - `community-skill`: `error: Please commit or stash them.`
-- Remaining dirty worktree check:
+    - `CONTROL.md`: `11f1350b7265c882ddd6ee622f4d069f35da00827e0b6e93cec3aae6f2419081`
+    - `OPERATING_RULES.md`: `5ee18b5b1e23bd719bd4c99bc27278cba97e0f01870136f37f090c382ff37ba2`
+- Active objective worktree check:
   - `git -C /root/openclaw-33/workspace/skills/community-skill status --short`
-  - Result: failed
+  - Result: passed for active objective continuation
   - Evidence:
-    - `community-skill`: `M scripts/community_integration.mjs`
-    - `community-skill`: `M tests/community-skill-outbound-v2.test.mjs`
-    - `community-skill`: `?? scripts/community-deliberation-ledger-cli.mjs`
+    - `M scripts/community_integration.mjs`
+    - `M tests/community-skill-outbound-v2.test.mjs`
+    - `?? scripts/community-deliberation-ledger-cli.mjs`
+- Focused objective validation:
+  - `node --test /root/openclaw-33/workspace/skills/community-skill/tests/community-skill-outbound-v2.test.mjs`
+  - Result: passed
+  - Evidence:
+    - `# tests 8`
+    - `# pass 8`
+    - `# fail 0`
 - Local worker-state consistency check:
   - `docs/control-plane/.runtime/worker-state.json`
   - Result: passed after refresh
   - Evidence:
-    - this loop stores `blocked` status with the same single blocker as `SERVER_REPORT.md`
-    - this loop carries the fresh `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree
+    - this loop stores the fresh current objective hash from `CONTROL.md`
+    - this loop records `running` with no blocker, matching this report
 
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T17:33:24+08:00`
-  - utc time: `2026-04-03T09:33:24Z`
+  - local time: `2026-04-03T17:37:32+08:00`
+  - utc time: `2026-04-03T09:37:32+00:00`
 - Control-plane objective evidence:
-  - `CONTROL.md` still names the publish/adoption path as the only active objective
-  - the control hash is unchanged from the previous loop
-  - the objective hash is freshly recomputed from `OBJECTIVE.md` in the synced working tree
-  - this loop keeps the same control-plane publish/adoption stabilization branch
-  - this loop preserves exactly one blocker and does not start a new branch
-  - this loop fixes the stale local runtime state so published status no longer claims `running` while blocked
+  - `CONTROL.md` now names the multi-agent `community-skill` communication boundary as the active objective
+  - the local `community-skill` edits align with that objective rather than conflicting with it
+  - this loop therefore continued the same single active branch instead of preserving the stale pull blocker
 
 ## Current Status
 
 - Passed:
-  - the loop followed the unchanged active objective from `CONTROL.md`
-  - no second execution branch was started
-  - the current blocker is preserved as exactly one blocker
-  - the report and local runtime state are refreshed together with matching `blocked` status
-  - the fresh report/state pair now records the synced-tree hashes and a consistent blocked heartbeat
+  - the loop followed the current active objective from `CONTROL.md`
+  - the active local `community-skill` branch remains singular
+  - the focused runtime/deliberation suite passes on the active branch
+  - the stale blocker was cleared because it no longer reflects the current objective state
+  - the report and worker state now match the current running heartbeat
 - Failed:
-  - the required cross-repo `git pull --rebase origin main` confirmation still cannot complete while local uncommitted changes remain in `community-skill`
+  - none in this loop
 
 ## Single Blocking Point
 
-Local uncommitted changes in `community-skill` prevent the required cross-repo `git pull --rebase origin main` confirmation.
+None.
 
 ## Recommendation
 
-Keep the worker on the same control-plane publish/adoption objective. Do not start a new branch unless `CONTROL.md` changes or the local `community-skill` changes are resolved enough for the required cross-repo pull-health confirmation to pass.
+Continue the same active `community-skill` communication-boundary branch on the next loop. Do not switch objectives unless `CONTROL.md` changes or a new concrete failure appears in this branch.
