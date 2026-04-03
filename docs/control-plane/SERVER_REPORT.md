@@ -13,15 +13,14 @@
 
 ## Autopilot Heartbeat
 
-- Loop: `10`
+- Loop: `1`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-04-03T08:45:17Z`
-- Last loop finished at: `2026-04-03T08:47:19Z`
+- Last loop started at: `2026-04-03T08:44:04.056649+00:00`
+- Last loop finished at: `2026-04-03T08:48:00.483048+00:00`
 - Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
-- Current worker status: `running`
+- Current worker status: `blocked`
 - Current blocker: `None.`
 - Codex objective step ran this loop: `true`
-
 ## Phase Summary
 
 - phase_success: `false`
