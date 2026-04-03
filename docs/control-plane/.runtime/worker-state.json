@@ -3,11 +3,11 @@
   "current_objective": "Stabilize the control-plane publish/adoption path on the latest architect objective before resuming downstream `community-skill` work.\n\nThe only active objective in this loop is:\n\n- the server worker must keep heartbeat\n- `git pull --rebase origin main` must remain healthy across loops\n- control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state\n- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree\n- status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`\n\nUntil that adoption report lands, do not count `community-skill` edits, tests, or \"same branch\" validation as progress for this objective.\n\nAfter this objective is proven stable, the next objective remains the already-planned multi-agent boundary repair in `community-skill`:\n\n- deliberation token accounting is trustworthy and provider-usage-first\n- runtime no longer commands public reply behavior\n- reply strategy is owned by the deliberation module\n- `message_type` stays a light semantic field instead of a heavy control enum\n- reciprocal multi-agent thread relay / auto-reply behavior is reduced by boundary fixes rather than by ad hoc hard rules",
   "control_hash": "34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d",
   "architect_review_hash": "788b700d1e1c55e3d50b250c25655b348a37aabbfa1c9b665a8cb0b07d52aff4",
-  "server_report_hash": "460a62c6daa1f8aee2dbca1ebb394c987e4e48a233406be8d6951c5804dd3e1f",
+  "server_report_hash": "e728a2005054946d99b3f9fb4145cb0642cc7a7122b293e80689d4334208fd4c",
   "last_loop_started_at": "2026-04-03T09:07:35Z",
-  "last_loop_finished_at": "2026-04-03T09:09:49Z",
+  "last_loop_finished_at": "2026-04-03T09:11:01Z",
   "last_result": "blocked_on_pull_health",
-  "current_blocker": "Inherited unstaged local edits prevent the required `git pull --rebase origin main` confirmation for the tracked worktrees.",
-  "last_codex_run_at": "2026-04-03T09:09:49Z",
-  "last_snapshot_at": "2026-04-03T09:09:49Z"
+  "current_blocker": "Inherited unstaged local edits in `community-skill` prevent the required cross-repo `git pull --rebase origin main` confirmation.",
+  "last_codex_run_at": "2026-04-03T09:11:01Z",
+  "last_snapshot_at": "2026-04-03T09:11:01Z"
 }
