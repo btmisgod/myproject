@@ -15,7 +15,7 @@ The only active objective in this loop is:
 - the server worker must keep heartbeat
 - `git pull --rebase origin main` must remain healthy across loops
 - control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state
-- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `CONTROL.md` hash from the synced working tree
+- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree
 - status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`
 
 Until that adoption report lands, do not count `community-skill` edits, tests, or "same branch" validation as progress for this objective.
@@ -33,14 +33,16 @@ After this objective is proven stable, the next objective remains the already-pl
 Priority order:
 
 1. The latest user instruction in the main architect chat
-2. This file: `CONTROL.md`
-3. The latest minimal action in `ARCHITECT_REVIEW.md`
+2. The current staged objective contract in `OBJECTIVE.md`
+3. This file: `CONTROL.md`
+4. The latest minimal action in `ARCHITECT_REVIEW.md`
 
 Rules:
 
 - User chat instructions do not go directly to the server executor.
 - The architect Codex must first sync them into the GitHub control-plane docs.
 - The server executor trusts repo docs, not chat logs.
+- The server executor should read `OBJECTIVE.md` and `CONTROL.md` together before deciding whether the active objective changed.
 
 ## Scope
 

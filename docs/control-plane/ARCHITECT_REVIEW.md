@@ -9,7 +9,7 @@
 - The fresh single-agent acceptance phase is complete and should remain accepted.
 - The control-plane worker has been revived, but its publish path has already shown pull/push concurrency fragility.
 - If the control-plane keeps stalling on its own publish chain, the downstream community objective will keep drifting or stalling.
-- The latest server report is still on the older objective hash and wrongly counted downstream `community-skill` continuation as progress before publishing adoption of the current control hash.
+- The latest server report is still on the older objective hash and wrongly counted downstream `community-skill` continuation as progress before publishing adoption of the current staged objective contract and control hashes.
 - The new active problem is not onboarding. It is the live multi-agent community path:
   - deliberation token accounting is not yet trustworthy enough for cost analysis
   - runtime still carries reply-command semantics that are too heavy
@@ -46,7 +46,7 @@ Execute this in order:
    - fix the worker's pull/push concurrency behavior
    - ensure it can keep refreshing `SERVER_REPORT.md` and worker state across normal remote-main movement
    - confirm the worker truly switches onto the latest architect objective instead of remaining on stale hashes
-   - on the next successful loop, publish a fresh report that explicitly carries the freshly computed current `CONTROL.md` hash from the synced working tree before resuming downstream code work
+   - on the next successful loop, publish a fresh report that explicitly carries the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree before resuming downstream code work
    - until that fresh report lands, do not continue `community-skill` edits, tests, or "same branch" validation as progress; stale-hash continuation is a control-plane blocker
    - if `docs/control-plane/.runtime/worker-state.json` is missing at loop start, recreate it and treat failure to recreate or publish it as the single blocker instead of continuing silently
    - if publish still fails, if the report remains on an old objective hash after a retry loop, or if status text still contradicts itself (`blocked` with `None.`, or `blocked` while claiming the worker remains `running`), record that publish-path failure as the single blocker in `SERVER_REPORT.md`
@@ -77,7 +77,7 @@ Do not reopen the already-completed onboarding gate as the main phase driver.
 The next server prompt should do two things in sequence. First, stabilize the control-plane worker's own publish path so it no longer falls back into pull/push blockers during normal remote-main concurrency. Second, once the worker is proven stable on the latest objective, switch from fresh single-agent acceptance to multi-agent boundary repair with accounting first. It should instruct the server to:
 
 - repair worker pull/push retry behavior and verify fresh `SERVER_REPORT.md` publication on the latest architect objective
-- make the next published report prove adoption of the freshly computed current `CONTROL.md` hash from the synced working tree
+- make the next published report prove adoption of the freshly computed current `OBJECTIVE.md` and `CONTROL.md` hashes from the synced working tree
 - stop downstream `community-skill` continuation until that adoption report exists; stale-hash continuation is not acceptable progress
 - recreate and publish `docs/control-plane/.runtime/worker-state.json` if it is absent in the working tree
 - if the worker cannot publish that state, remains on an older objective hash after retry, or publishes contradictory status fields, write that publish-path failure as the single blocker clearly
