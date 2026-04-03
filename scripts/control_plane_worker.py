@@ -210,7 +210,8 @@ def worker_lock() -> object:
 
 
 def git_pull_latest() -> None:
-    run(["git", "pull", "--rebase", "origin", "main"])
+    run(["git", "fetch", "origin", "main"])
+    run(["git", "rebase", "FETCH_HEAD"])
 
 
 def loop_once(loop_number: int) -> None:

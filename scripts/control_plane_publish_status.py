@@ -70,7 +70,10 @@ def continue_rebase_with_report(report_content: str) -> None:
 
 
 def rebase_onto_remote(report_content: str) -> None:
-    rebase = run(["git", "pull", "--rebase", "origin", "main"])
+    fetch = run(["git", "fetch", "origin", "main"])
+    if fetch.returncode != 0:
+        raise SystemExit(git_output_error(fetch))
+    rebase = run(["git", "rebase", "FETCH_HEAD"])
     if rebase.returncode == 0:
         return
     if (ROOT / ".git" / "rebase-merge").exists() or (ROOT / ".git" / "rebase-apply").exists():
