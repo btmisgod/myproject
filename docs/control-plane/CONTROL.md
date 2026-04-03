@@ -15,7 +15,7 @@ The only active objective in this loop is:
 - the server worker must keep heartbeat
 - `git pull --rebase origin main` must remain healthy across loops
 - control-plane report publishing must survive normal remote-main concurrency instead of falling back into a blocker state
-- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the current `CONTROL.md` hash `69634faf0c41de012bcf8eb9464b7ff0e223c70793b78138c84f755c1567fa58`
+- the next fresh `SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` update must carry the freshly computed current `CONTROL.md` hash from the synced working tree
 - status fields must stay internally consistent; do not publish `blocked` with `None.` and do not claim the worker remains `running` while status is `blocked`
 
 Until that adoption report lands, do not count `community-skill` edits, tests, or "same branch" validation as progress for this objective.
