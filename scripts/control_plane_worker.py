@@ -152,6 +152,14 @@ def publish_report(summary: str) -> tuple[bool, str]:
     return proc.returncode == 0, output
 
 
+def publish_worker_artifacts(summary: str, loop_number: int, *, failure_event: str) -> None:
+    publish_ok, publish_output = publish_report(summary)
+    if publish_ok:
+        log("publish_completed", loop=loop_number, output=publish_output)
+        return
+    log(failure_event, loop=loop_number, output=publish_output)
+
+
 def set_push_failure_blocker(report_text: str, message: str) -> str:
     replacement = (
         "## Single Blocking Point\n\n"
@@ -340,6 +348,11 @@ def main() -> int:
                     last_result="loop_exception",
                     current_blocker=str(exc),
                     last_codex_run_at=load_state().get("last_codex_run_at"),
+                )
+                publish_worker_artifacts(
+                    f"worker loop {loop_number} exception",
+                    loop_number,
+                    failure_event="publish_failed_after_exception",
                 )
             if RUN_ONCE:
                 break

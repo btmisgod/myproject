@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "docs" / "control-plane" / "SERVER_REPORT.md"
 REPORT_REL = str(REPORT_PATH.relative_to(ROOT))
+STATE_PATH = ROOT / "docs" / "control-plane" / ".runtime" / "worker-state.json"
+STATE_REL = str(STATE_PATH.relative_to(ROOT))
+PUBLISH_PATHS = [REPORT_REL, STATE_REL]
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
@@ -19,22 +22,22 @@ def git_output_error(proc: subprocess.CompletedProcess[str]) -> str:
     return proc.stderr.strip() or proc.stdout.strip() or "git command failed"
 
 
-def has_report_changes() -> bool:
-    status = run(["git", "status", "--porcelain", REPORT_REL])
+def has_publish_changes() -> bool:
+    status = run(["git", "status", "--porcelain", "--", *PUBLISH_PATHS])
     if status.returncode != 0:
         raise SystemExit(git_output_error(status))
     return bool(status.stdout.strip())
 
 
-def stage_report() -> None:
-    add = run(["git", "add", REPORT_REL])
+def stage_publish_paths() -> None:
+    add = run(["git", "add", "--", *PUBLISH_PATHS])
     if add.returncode != 0:
         raise SystemExit(git_output_error(add))
 
 
 def commit_report(summary: str) -> bool:
-    stage_report()
-    status = run(["git", "status", "--porcelain", REPORT_REL])
+    stage_publish_paths()
+    status = run(["git", "status", "--porcelain", "--", *PUBLISH_PATHS])
     if status.returncode != 0:
         raise SystemExit(git_output_error(status))
     if not status.stdout.strip():
@@ -46,8 +49,8 @@ def commit_report(summary: str) -> bool:
     return True
 
 
-def restore_report(ref: str) -> None:
-    restore = run(["git", "restore", "--source", ref, "--staged", "--worktree", "--", REPORT_REL])
+def restore_publish_paths(ref: str) -> None:
+    restore = run(["git", "restore", "--source", ref, "--staged", "--worktree", "--", *PUBLISH_PATHS])
     if restore.returncode != 0:
         raise SystemExit(git_output_error(restore))
 
@@ -58,12 +61,12 @@ def cleanup_publish_attempt(start_head: str) -> None:
     reset = run(["git", "reset", "--mixed", start_head])
     if reset.returncode != 0:
         raise SystemExit(git_output_error(reset))
-    restore_report(start_head)
+    restore_publish_paths(start_head)
 
 
 def continue_rebase_with_report(report_content: str) -> None:
     REPORT_PATH.write_text(report_content, encoding="utf-8")
-    stage_report()
+    stage_publish_paths()
     cont = run(["git", "-c", "core.editor=true", "rebase", "--continue"])
     if cont.returncode != 0:
         raise SystemExit(git_output_error(cont))
@@ -84,7 +87,7 @@ def rebase_onto_remote(report_content: str) -> None:
 
 def push_with_retry(summary: str, report_content: str, start_head: str) -> int:
     for attempt in range(2):
-        if has_report_changes():
+        if has_publish_changes():
             commit_report(summary)
         push = run(["git", "push", "origin", "main"])
         if push.returncode == 0:
@@ -115,8 +118,8 @@ def main() -> int:
     if not REPORT_PATH.exists():
         raise SystemExit(f"missing report file: {REPORT_PATH}")
 
-    if not has_report_changes():
-        print("no_report_changes")
+    if not has_publish_changes():
+        print("no_publish_changes")
         return 0
 
     start_head = run(["git", "rev-parse", "HEAD"])
