@@ -6,16 +6,15 @@
 
 ## Architecture Judgment
 
-- The current server-verified baseline is aligned with the design docs:
-  - targeted run => execute + reply
-  - non-targeted run => observe_only / no outbound / no reply
-  - status => enters system / no auto reply
-- Community and skill now share the same first-baseline behavior model.
-- No rollback is needed for the verified active-chain fixes.
-- Autopilot is active on the server and has already completed one fresh-instance validation loop.
-- The fresh-install `targeted run` mismatch has been cleared on the server side.
-- The reciprocal auto-reply loop is a later-stage collaboration-boundary issue, not the current phase gate.
-- The current phase is successful once one fresh OpenClaw instance can install `community-skill`, connect automatically, and pass the current baseline acceptance path.
+- The fresh single-agent acceptance phase is complete and should remain accepted.
+- The new active problem is not onboarding. It is the live multi-agent community path:
+  - deliberation token accounting is not yet trustworthy enough for cost analysis
+  - runtime still carries reply-command semantics that are too heavy
+  - `targeted` still behaves too much like a must-public-reply trigger
+  - `message_type` is still heavier than the intended lightweight semantic role
+- No rollback is needed for the already accepted onboarding and single-agent baseline fixes.
+- The next phase should tighten boundaries instead of adding more runtime rules.
+- Provider usage returned by the model service should be the primary accounting source because reading returned usage does not add prompt token cost.
 
 ## Accepted Results
 
@@ -24,37 +23,47 @@
 - Profile sync as a soft dependency is accepted.
 - JSON-safe message protocol serialization is accepted.
 - Fresh-install onboarding, runtime installation, and first targeted execution recovery are accepted as current-phase progress.
+- Fresh single-agent acceptance is accepted as phase-complete.
 
 ## Rejected / Out-of-Scope Changes
 
 - No new feature expansion
 - No task-platform rebuild
 - No broad workflow or task-contract expansion in this phase
+- No new hard reply rules added into runtime just to suppress loops
+- No display-name-based `self_message` hacks
+- No curl / sender-channel hardening in this phase unless it blocks the active objective directly
 
 ## Next Minimal Action
 
-Return to the current phase boundary and validate fresh-install acceptance without expanding into later-stage multi-agent coordination repair:
+Start with the accounting and boundary foundation, not with a large loop-repair branch:
 
-- keep the already recovered fresh targeted execution path as-is
-- run the acceptance as a single-agent validation path, not as an open-ended two-agent conversation
-- use an inert sender path for the triggering message:
-  - community CLI
-  - admin-bound identity
-  - or another sender that will not auto-reply back into the thread
-- verify that a newly installed fresh instance can:
-  - install the skill
-  - complete onboarding automatically
-  - register webhook and join the group
-  - receive and execute a targeted baseline message
-  - remain correct on non-targeted and status baseline handling
-- keep `openclaw-33` from re-entering the thread as an auto-replying peer during this phase acceptance run
-- perform this acceptance in a way that does not require solving the reciprocal two-agent reply loop yet
-- treat the reciprocal loop as a documented later-stage issue unless it blocks single-agent fresh-install acceptance directly
-- once one fresh instance passes that acceptance path, mark the phase as successful and move to retrospective review prep
-- execute this acceptance path immediately on the current fresh workspace instead of remaining in a blocked waiting loop
+- keep the already accepted fresh single-agent acceptance record intact
+- first repair deliberation accounting in `community-skill`
+  - use provider-returned `usage` as the primary source
+  - keep local module-level estimates only as fallback when provider usage is absent
+  - distinguish explicit terminal states instead of mixing real calls and pending skeletons
+- then reduce runtime semantics
+  - runtime should extract responsibility signals and minimal semantic framing only
+  - runtime should not act like a public-reply commander
+  - `targeted` should mean strong processing signal that must enter deliberation, not a mechanical must-public-reply command
+- keep reply-strategy decisions inside the deliberation module
+- move `message_type` toward lightweight semantic use plus group-local extension, not stronger bottom-layer control
+- after those code changes, run a short multi-agent validation window and record:
+  - provider usage vs fallback ledger behavior
+  - runtime output shape
+  - deliberation outcome
+  - whether the targeted thread still relays excessively
 
-Do not open a new branch around multi-agent loop repair in this phase.
+Do not reopen the already-completed onboarding gate as the main phase driver.
 
 ## Prompt Delta
 
-The next server prompt should de-scope the reciprocal multi-agent reply loop from the current gate and immediately run the fresh single-agent acceptance path on the existing fresh workspace. It should instruct the server to validate fresh-install onboarding and the single-agent baseline path with an inert sender, preserve the restored targeted behavior, rerun fresh targeted/non-targeted/status acceptance without letting `openclaw-33` auto-reply into the same validation thread, and record the reciprocal loop only as a deferred issue unless it blocks the fresh single-agent acceptance path directly.
+The next server prompt should switch from fresh single-agent acceptance to multi-agent boundary repair with accounting first. It should instruct the server to:
+
+- implement provider-usage-first deliberation accounting with explicit terminal states
+- keep module-level token breakdown as local fallback only
+- reduce runtime so it no longer commands public reply behavior
+- move reply-strategy ownership into the deliberation module
+- keep `message_type` lightweight
+- validate these changes with a short controlled multi-agent interaction window and record the evidence
