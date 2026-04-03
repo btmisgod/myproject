@@ -8,24 +8,24 @@
   - `community-skill`: `/root/openclaw-33/workspace/skills/community-skill`
 - fresh validation workspace: `/root/openclaw-fresh-main-0322/workspace`
 - Current commit:
-  - `myproject`: `e8c80ac6208118d50280d884bffb6db9048771b7`
+  - `myproject`: `17f5546844fb8a85849d6caedf1b2641c71dafa2`
   - `community-skill`: `90e81e0d9fec22e61ac26586ff39139dd6dff3f8`
 
 ## Autopilot Heartbeat
 
-- Loop: `2`
+- Loop: `3`
 - Poll interval seconds: `120`
-- Last loop started at: `2026-04-03T09:01:18.285953+00:00`
-- Last loop finished at: `2026-04-03T09:05:00.018450+00:00`
+- Last loop started at: `2026-04-03T09:07:35Z`
+- Last loop finished at: `2026-04-03T09:09:30Z`
 - Current objective hash: `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
 - Current worker status: `blocked`
-- Current blocker: `None.`
+- Current blocker: `Inherited unstaged local edits prevent the required \`git pull --rebase origin main\` confirmation for the tracked worktrees.`
 - Codex objective step ran this loop: `true`
 ## Phase Summary
 
-- phase_success: `true`
+- phase_success: `false`
 - active_phase: `control-plane publish/adoption stabilization`
-- validation_checkpoint: `control-plane state and report are refreshed from the synced tree with internally consistent running status`
+- validation_checkpoint: `blocker state is refreshed consistently while the active objective and control hash remain unchanged`
 
 ## Current Active Objective
 
@@ -42,15 +42,13 @@ Stabilize the control-plane publish/adoption path on the latest architect object
 - Read the current `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json`
 - Confirmed the live control hash is `34048cc5827475a2a4063f6bf5e82cb24af4f453af2254f4d0705110e524f43d`
 - Confirmed the live objective hash is `1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7`
-- Confirmed `origin/main` already matches local `HEAD` at `a989fb629e4a14650a7929f2fa23988b931203f3`, so the working tree was synced before this report refresh
-- Confirmed the inherited `community-skill` local edits remain limited to:
-  - `scripts/community_integration.mjs`
-  - `tests/community-skill-outbound-v2.test.mjs`
-- Did not continue downstream `community-skill` implementation in this loop because `CONTROL.md` explicitly keeps the control-plane publish/adoption path as the only active objective
-- Confirmed the inherited local worker-state edit was only an unfinished heartbeat refresh on the same active objective, not a new execution branch
-- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` for the current active objective
-- Published the refreshed report once through `scripts/control_plane_publish_status.py` and confirmed the push path stayed healthy
-- Confirmed `git pull --rebase origin main` still succeeds immediately after the report publish
+- Confirmed `CONTROL.md` remains unchanged for this loop, so the active objective did not change
+- Confirmed the inherited dirty worktrees remain:
+  - `myproject`: `docs/control-plane/.runtime/worker-state.json`
+  - `community-skill`: `scripts/community_integration.mjs`, `tests/community-skill-outbound-v2.test.mjs`
+- Re-ran the required pull-health checks and confirmed both tracked worktrees reject `git pull --rebase origin main` while those unstaged edits remain
+- Did not start any downstream `community-skill` execution branch because the active objective is still the control-plane publish/adoption path and it is blocked on pull health
+- Refreshed `docs/control-plane/SERVER_REPORT.md` and `docs/control-plane/.runtime/worker-state.json` with one explicit blocker and internally consistent `blocked` status
 
 ## Files Changed
 
@@ -67,66 +65,59 @@ Stabilize the control-plane publish/adoption path on the latest architect object
     - `ARCHITECT_REVIEW.md`: `788b700d1e1c55e3d50b250c25655b348a37aabbfa1c9b665a8cb0b07d52aff4`
     - `OBJECTIVE.md`: `1b1630b8593949b49c7cdb1df12a98c2f556d273fa21e383ebbc42c1af28eeb7`
 - Main repo sync check:
-  - `git fetch origin main`
   - `git rev-parse HEAD`
   - `git rev-parse origin/main`
   - Result: passed
   - Evidence:
-    - `HEAD`: `a989fb629e4a14650a7929f2fa23988b931203f3`
-    - `origin/main`: `a989fb629e4a14650a7929f2fa23988b931203f3`
-- Local worker-state check:
-  - `git diff -- docs/control-plane/.runtime/worker-state.json`
-  - Result: passed
-  - Evidence:
-    - worker state now carries the current control, architect-review, and objective hashes
-    - worker state status remains `running`
-    - worker state blocker remains `None.`
-- Publish path check:
-  - `python3 scripts/control_plane_publish_status.py --summary 'autopilot loop 2 status refresh'`
-  - Result: passed
-  - Evidence:
-    - output: `pushed_server_report`
-    - publish commit: `e8c80ac6208118d50280d884bffb6db9048771b7`
-- Downstream state check:
-  - `git -C /root/openclaw-33/workspace/skills/community-skill branch --show-current`
-  - `git -C /root/openclaw-33/workspace/skills/community-skill status --short`
-  - Result: passed
-  - Evidence:
-    - `community-skill` remains on branch `main`
-    - only the inherited two-file local objective diff is present
-    - no new downstream execution branch was started in this loop
-- Post-publish pull check:
+    - `HEAD`: `17f5546844fb8a85849d6caedf1b2641c71dafa2`
+    - `origin/main`: `17f5546844fb8a85849d6caedf1b2641c71dafa2`
+- Pull health check:
   - `git pull --rebase origin main`
+  - `git -C /root/openclaw-33/workspace/skills/community-skill pull --rebase origin main`
+  - Result: failed
+  - Evidence:
+    - `myproject`: `error: cannot pull with rebase: You have unstaged changes.`
+    - `community-skill`: `error: cannot pull with rebase: You have unstaged changes.`
+- Dirty worktree check:
+  - `git status --short`
+  - `git -C /root/openclaw-33/workspace/skills/community-skill status --short`
+  - Result: failed
+  - Evidence:
+    - `myproject`: `M docs/control-plane/.runtime/worker-state.json`
+    - `community-skill`: `M scripts/community_integration.mjs`, `M tests/community-skill-outbound-v2.test.mjs`
+- Local worker-state check:
+  - `docs/control-plane/.runtime/worker-state.json`
   - Result: passed
   - Evidence:
-    - `Already up to date.`
+    - worker state now carries the current control, architect-review, objective, and server-report hashes
+    - worker state status is `blocked`
+    - worker state blocker matches the single blocker recorded in this report
 
 ## Logs / Evidence
 
 - Loop timestamp evidence:
-  - local time: `2026-04-03T17:03:41+0800`
-  - utc time: `2026-04-03T09:03:41Z`
+  - local time: `2026-04-03T17:07:35+0800`
+  - utc time: `2026-04-03T09:07:35Z`
 - Control-plane objective evidence:
   - `CONTROL.md` still names the publish/adoption path as the only active objective
-  - this loop continues the same control-plane publish/adoption stabilization branch
-  - `SERVER_REPORT.md` and `.runtime/worker-state.json` are refreshed together on the synced tree with `running` status and `None.` as the current blocker
+  - the control hash is unchanged from the previous loop
+  - this loop keeps the same control-plane publish/adoption stabilization branch
+  - `SERVER_REPORT.md` and `.runtime/worker-state.json` are refreshed together with one explicit blocker and matching `blocked` status
 
 ## Current Status
 
 - Passed:
   - the loop followed the unchanged active objective from `CONTROL.md`
-  - the working tree was confirmed synced against `origin/main` before the report refresh
   - no second execution branch was started
   - the control-plane status fields are internally consistent in this loop
-  - the report publish script succeeded on the current objective
-  - `git pull --rebase origin main` still succeeds after the publish step
+  - the current blocker is preserved as exactly one blocker
 - Failed:
-  - none
+  - the required `git pull --rebase origin main` confirmation cannot run cleanly while inherited unstaged edits remain in the tracked worktrees
 
 ## Single Blocking Point
 
-None.
+Inherited unstaged local edits prevent the required `git pull --rebase origin main` confirmation for the tracked worktrees.
 
 ## Recommendation
 
-Keep the worker on the same control-plane publish/adoption objective until this report publication path has been proven stable across loops. Do not count downstream `community-skill` work as progress for this objective.
+Keep the worker on the same control-plane publish/adoption objective. Do not start a new branch unless `CONTROL.md` changes or the tracked worktrees are cleaned enough for the required pull-health confirmation to pass.
