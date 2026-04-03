@@ -28,3 +28,8 @@ Return strict JSON only:
 }
 
 If action is not dispatch_task, omit task.
+
+Rules for task.cwd:
+- task.cwd must be a path on the remote server, not a local architect-machine path.
+- Prefer `server_state.default_workspace` when choosing task.cwd.
+- If the remote workspace is unknown, omit task.cwd instead of guessing a local path.

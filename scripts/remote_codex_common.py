@@ -44,7 +44,12 @@ def write_text(path: Path, content: str) -> None:
     os.replace(tmp, path)
 
 
-def run_command(cmd: list[str], cwd: Path | None = None, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
+def run_command(
+    cmd: list[str],
+    cwd: Path | None = None,
+    timeout: int | None = None,
+    stdin_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -54,6 +59,7 @@ def run_command(cmd: list[str], cwd: Path | None = None, timeout: int | None = N
         capture_output=True,
         check=False,
         timeout=timeout,
+        input=stdin_text,
     )
 
 

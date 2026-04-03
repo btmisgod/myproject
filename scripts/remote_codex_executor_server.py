@@ -60,6 +60,7 @@ EXECUTOR_LOCK = threading.Lock()
 def default_state() -> dict[str, Any]:
     return {
         "worker_id": WORKER_ID,
+        "default_workspace": str(DEFAULT_WORKSPACE),
         "status": "ready",
         "current_task_id": None,
         "last_task_started_at": None,
@@ -157,7 +158,10 @@ def parse_json_message(raw: str) -> dict[str, Any]:
 
 def execute_task(task: dict[str, Any]) -> dict[str, Any]:
     task_id = str(task["task_id"])
-    workspace = Path(task.get("cwd") or DEFAULT_WORKSPACE)
+    requested_workspace = task.get("cwd")
+    workspace = Path(requested_workspace) if requested_workspace else DEFAULT_WORKSPACE
+    if not workspace.exists():
+        workspace = DEFAULT_WORKSPACE
     prompt = build_codex_prompt(task)
     message_path = RUNTIME_DIR / f"last-message-{task_id}.txt"
     cmd = [
@@ -170,7 +174,7 @@ def execute_task(task: dict[str, Any]) -> dict[str, Any]:
         str(message_path),
         "-",
     ]
-    proc = run_command(cmd, cwd=workspace, timeout=CODEX_TIMEOUT_SECONDS)
+    proc = run_command(cmd, cwd=workspace, timeout=CODEX_TIMEOUT_SECONDS, stdin_text=prompt + "\n")
     output = summarize_completed(proc)
     final_message = read_text(message_path, output)
     try:
@@ -186,6 +190,7 @@ def execute_task(task: dict[str, Any]) -> dict[str, Any]:
         }
     result["task_id"] = task_id
     result["worker_id"] = WORKER_ID
+    result["requested_workspace"] = str(requested_workspace) if requested_workspace else None
     result["workspace"] = str(workspace)
     result["executed_at"] = utc_now()
     if output:

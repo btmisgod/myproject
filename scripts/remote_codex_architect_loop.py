@@ -77,7 +77,7 @@ def codex_decide(prompt: str) -> dict:
         str(LAST_MESSAGE_PATH),
         "-",
     ]
-    proc = run_command(cmd, cwd=ROOT, timeout=CODEX_TIMEOUT_SECONDS)
+    proc = run_command(cmd, cwd=ROOT, timeout=CODEX_TIMEOUT_SECONDS, stdin_text=prompt)
     output = summarize_completed(proc)
     if proc.returncode != 0:
         raise RuntimeError(output or f"codex exec failed with {proc.returncode}")
