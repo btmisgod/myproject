@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,6 +30,7 @@ STATE_PATH = RUNTIME_DIR / "state.json"
 TASK_PATH = RUNTIME_DIR / "current_task.json"
 RESULT_PATH = RUNTIME_DIR / "last_result.json"
 RESULTS_DIR = RUNTIME_DIR / "results"
+EVENTS_PATH = RUNTIME_DIR / "events.jsonl"
 TOKEN_PATH = RUNTIME_DIR / "auth-token.txt"
 DEFAULT_WORKSPACE = Path(os.environ.get("REMOTE_CODEX_EXECUTOR_DEFAULT_WORKSPACE", "/root/agent-community"))
 CODEX_BIN = os.environ.get("REMOTE_CODEX_EXECUTOR_CODEX_BIN", "codex")
@@ -94,6 +96,17 @@ def respond_json(handler: BaseHTTPRequestHandler, payload: dict[str, Any], statu
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def respond_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
+    body = html.encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Cache-Control", "no-store")
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -156,6 +169,484 @@ def parse_json_message(raw: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
+def append_event(source: str, kind: str, **payload: Any) -> None:
+    ensure_dir(EVENTS_PATH.parent)
+    event = {
+        "timestamp": utc_now(),
+        "source": source,
+        "kind": kind,
+        **payload,
+    }
+    with EVENTS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def load_events(limit: int = 120) -> list[dict[str, Any]]:
+    if not EVENTS_PATH.exists():
+        return synthesize_events(limit=limit)
+    events: list[dict[str, Any]] = []
+    with EVENTS_PATH.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                events.append(json.loads(text))
+            except json.JSONDecodeError:
+                continue
+    if not events:
+        return synthesize_events(limit=limit)
+    return sorted(events, key=lambda item: item.get("timestamp") or "", reverse=True)[:limit]
+
+
+def synthesize_events(limit: int = 60) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    files = sorted(RESULTS_DIR.glob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)[: max(1, limit // 2)]
+    for path in files:
+        result = load_json(path, {})
+        task_id = str(result.get("task_id") or path.stem)
+        timestamp = str(result.get("executed_at") or utc_now())
+        summary = str(result.get("summary") or "")
+        status = str(result.get("task_status") or "unknown")
+        events.append(
+            {
+                "timestamp": timestamp,
+                "source": "architect",
+                "kind": "task_dispatched_history",
+                "task_id": task_id,
+                "title": task_id,
+                "message": "历史任务补录",
+                "goal": summary,
+            }
+        )
+        events.append(
+            {
+                "timestamp": timestamp,
+                "source": "server",
+                "kind": "task_finished_history",
+                "task_id": task_id,
+                "status": status,
+                "summary": summary,
+                "blocker": str(result.get("blocker") or ""),
+            }
+        )
+    return events[:limit]
+
+
+def parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def bucket_start(timestamp: str | None) -> str:
+    moment = parse_iso(timestamp)
+    if moment is None:
+        moment = datetime.now(timezone.utc)
+    moment = moment.astimezone(timezone.utc)
+    minute = 0 if moment.minute < 30 else 30
+    bucket = moment.replace(minute=minute, second=0, microsecond=0)
+    return bucket.isoformat()
+
+
+def build_half_hour_summaries(events: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for event in events:
+        start = bucket_start(event.get("timestamp"))
+        bucket = buckets.setdefault(
+            start,
+            {
+                "bucket_start": start,
+                "architect_count": 0,
+                "server_count": 0,
+                "completed_count": 0,
+                "blocked_count": 0,
+                "tasks": [],
+            },
+        )
+        if event.get("source") == "architect":
+            bucket["architect_count"] += 1
+        if event.get("source") == "server":
+            bucket["server_count"] += 1
+        status = str(event.get("status") or "")
+        if status == "completed":
+            bucket["completed_count"] += 1
+        if status == "blocked":
+            bucket["blocked_count"] += 1
+        task_id = str(event.get("task_id") or "")
+        if task_id and task_id not in bucket["tasks"]:
+            bucket["tasks"].append(task_id)
+    summaries: list[dict[str, Any]] = []
+    for start in sorted(buckets.keys(), reverse=True)[:limit]:
+        bucket = buckets[start]
+        dt = parse_iso(start) or datetime.now(timezone.utc)
+        end = dt + timedelta(minutes=30)
+        tasks = "、".join(bucket["tasks"][:3]) or "无"
+        message = (
+            f"{dt.astimezone().strftime('%H:%M')} - {end.astimezone().strftime('%H:%M')} "
+            f"接收 {bucket['architect_count']} 次指令，服务器记录 {bucket['server_count']} 次事件，"
+            f"完成 {bucket['completed_count']} 个任务，阻塞 {bucket['blocked_count']} 个。"
+            f" 主要任务：{tasks}"
+        )
+        summaries.append(
+            {
+                "bucket_start": start,
+                "message": message,
+            }
+        )
+    return summaries
+
+
+def ui_log_entry(event: dict[str, Any]) -> dict[str, Any]:
+    timestamp = str(event.get("timestamp") or "")
+    task_id = str(event.get("task_id") or "")
+    title = str(event.get("title") or task_id or event.get("kind") or "event")
+    summary = str(event.get("summary") or event.get("message") or event.get("goal") or "")
+    blocker = str(event.get("blocker") or "")
+    status = str(event.get("status") or event.get("kind") or "")
+    return {
+        "timestamp": timestamp,
+        "task_id": task_id,
+        "title": title,
+        "status": status,
+        "summary": summary,
+        "blocker": blocker,
+    }
+
+
+def sanitize_task(task: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": task.get("task_id"),
+        "title": task.get("title"),
+        "goal": task.get("goal"),
+        "status": task.get("status"),
+        "received_at": task.get("received_at"),
+        "started_at": task.get("started_at"),
+        "finished_at": task.get("finished_at"),
+    }
+
+
+def sanitize_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": result.get("task_id"),
+        "task_status": result.get("task_status"),
+        "summary": result.get("summary"),
+        "blocker": result.get("blocker"),
+        "changed_files": result.get("changed_files") or [],
+        "tests": result.get("tests") or [],
+        "executed_at": result.get("executed_at"),
+    }
+
+
+def build_ui_snapshot() -> dict[str, Any]:
+    state = load_state()
+    current_task = load_json(TASK_PATH, {})
+    last_result = load_json(RESULT_PATH, {})
+    events = load_events(limit=160)
+    architect_logs = [ui_log_entry(event) for event in events if event.get("source") == "architect"][:24]
+    server_logs = [ui_log_entry(event) for event in events if event.get("source") == "server"][:24]
+    summaries = build_half_hour_summaries(events, limit=10)
+    return {
+        "worker_id": WORKER_ID,
+        "state": state,
+        "current_task": sanitize_task(current_task),
+        "last_result": sanitize_result(last_result),
+        "summaries": summaries,
+        "architect_logs": architect_logs,
+        "server_logs": server_logs,
+        "updated_at": utc_now(),
+    }
+
+
+def dashboard_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remote Codex Executor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --good: #166534;
+      --good-soft: #dcfce7;
+      --warn: #92400e;
+      --warn-soft: #fef3c7;
+      --bad: #991b1b;
+      --bad-soft: #fee2e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 22%, var(--bg) 100%);
+      color: var(--ink);
+    }
+    .page {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
+    .hero {
+      padding: 22px 24px 18px;
+      margin-bottom: 18px;
+    }
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .title {
+      margin: 0;
+      font-size: 30px;
+      font-weight: 760;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .status-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--line);
+      background: #f9fafb;
+    }
+    .badge.good { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+    .badge.warn { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+    .badge.bad { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
+    .hero-grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+    }
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .stat-value {
+      margin-top: 8px;
+      font-size: 20px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+    .panel {
+      padding: 18px 18px 12px;
+      margin-bottom: 18px;
+    }
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .summary-list, .log-list {
+      display: grid;
+      gap: 10px;
+    }
+    .summary-item, .log-item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: #fcfcff;
+    }
+    .summary-meta, .log-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .log-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .log-item h4 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+    .log-item p {
+      margin: 0;
+      color: var(--ink);
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 12px 4px;
+    }
+    @media (max-width: 900px) {
+      .log-grid { grid-template-columns: 1fr; }
+      .page { padding: 18px 14px 28px; }
+      .title { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1 class="title">Remote Codex 工作台</h1>
+          <p class="subtitle">顶部按 30 分钟汇总简报，下面左侧展示架构师通讯日志，右侧展示服务器执行日志。</p>
+        </div>
+        <div class="status-badges" id="status-badges"></div>
+      </div>
+      <div class="hero-grid" id="hero-grid"></div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">简报日志（每 30 分钟汇总）</h2>
+      <div class="summary-list" id="summary-list"></div>
+    </section>
+
+    <section class="log-grid">
+      <section class="panel">
+        <h2 class="panel-title">架构师通讯日志</h2>
+        <div class="log-list" id="architect-list"></div>
+      </section>
+      <section class="panel">
+        <h2 class="panel-title">服务器通讯日志</h2>
+        <div class="log-list" id="server-list"></div>
+      </section>
+    </section>
+  </div>
+  <script>
+    const badgeTone = (value) => {
+      if (value === "ready" || value === "completed") return "good";
+      if (value === "running" || value === "pending") return "warn";
+      return "bad";
+    };
+
+    const safe = (value) => value ?? "";
+
+    const renderEmpty = (el, text) => {
+      el.innerHTML = `<div class="empty">${text}</div>`;
+    };
+
+    const renderLogs = (id, items) => {
+      const el = document.getElementById(id);
+      if (!items || !items.length) {
+        renderEmpty(el, "暂无日志。");
+        return;
+      }
+      el.innerHTML = items.map((item) => `
+        <article class="log-item">
+          <div class="log-meta">
+            <span>${safe(item.timestamp)}</span>
+            <span>${safe(item.status)}</span>
+          </div>
+          <h4>${safe(item.title || item.task_id || "事件")}</h4>
+          <p>${safe(item.summary || item.blocker || "无补充说明")}</p>
+        </article>
+      `).join("");
+    };
+
+    const renderSummaries = (items) => {
+      const el = document.getElementById("summary-list");
+      if (!items || !items.length) {
+        renderEmpty(el, "暂无汇总，等待新的任务与执行痕迹。");
+        return;
+      }
+      el.innerHTML = items.map((item) => `
+        <article class="summary-item">
+          <div class="summary-meta">
+            <span>${safe(item.bucket_start)}</span>
+          </div>
+          <div>${safe(item.message)}</div>
+        </article>
+      `).join("");
+    };
+
+    const renderHero = (snapshot) => {
+      const state = snapshot.state || {};
+      const currentTask = snapshot.current_task || {};
+      const lastResult = snapshot.last_result || {};
+      const badges = document.getElementById("status-badges");
+      badges.innerHTML = [
+        ["执行端", snapshot.worker_id || "unknown", ""],
+        ["当前状态", state.status || "unknown", badgeTone(state.status || "unknown")],
+        ["当前任务", state.current_task_id || "none", ""],
+      ].map(([label, value, tone]) => `<span class="badge ${tone}">${label}：${safe(value)}</span>`).join("");
+
+      const stats = [
+        ["当前状态", state.status || "unknown"],
+        ["当前任务", state.current_task_id || "无"],
+        ["最近结果", state.last_result_status || "无"],
+        ["最近摘要", state.last_result_summary || "无"],
+        ["当前阻塞", state.current_blocker || "无"],
+        ["心跳时间", state.last_heartbeat_at || "无"],
+        ["任务开始", currentTask.started_at || state.last_task_started_at || "无"],
+        ["任务结束", currentTask.finished_at || state.last_task_finished_at || "无"],
+        ["最后结果文件", lastResult.task_id || "无"],
+      ];
+      document.getElementById("hero-grid").innerHTML = stats.map(([label, value]) => `
+        <div class="stat">
+          <div class="stat-label">${label}</div>
+          <div class="stat-value">${safe(value)}</div>
+        </div>
+      `).join("");
+    };
+
+    async function load() {
+      const response = await fetch("/ui-data", { cache: "no-store" });
+      const payload = await response.json();
+      renderHero(payload);
+      renderSummaries(payload.summaries || []);
+      renderLogs("architect-list", payload.architect_logs || []);
+      renderLogs("server-list", payload.server_logs || []);
+    }
+
+    load().catch((error) => {
+      document.getElementById("summary-list").innerHTML = `<div class="empty">页面加载失败：${error}</div>`;
+    });
+    setInterval(() => {
+      load().catch(() => {});
+    }, 15000);
+  </script>
+</body>
+</html>
+"""
+
+
 def execute_task(task: dict[str, Any]) -> dict[str, Any]:
     task_id = str(task["task_id"])
     requested_workspace = task.get("cwd")
@@ -205,6 +696,14 @@ def mark_task_running(task: dict[str, Any]) -> None:
     task["status"] = "running"
     task["started_at"] = utc_now()
     save_json(TASK_PATH, task)
+    append_event(
+        "server",
+        "task_running",
+        task_id=task.get("task_id"),
+        title=task.get("title"),
+        status="running",
+        summary="服务器开始执行任务",
+    )
     state = load_state()
     state.update(
         {
@@ -239,6 +738,15 @@ def finish_task(task: dict[str, Any], result: dict[str, Any]) -> None:
         }
     )
     save_state(state)
+    append_event(
+        "server",
+        "task_finished",
+        task_id=task.get("task_id"),
+        title=task.get("title"),
+        status=terminal,
+        summary=result.get("summary"),
+        blocker=result.get("blocker"),
+    )
 
 
 def worker_loop() -> None:
@@ -264,6 +772,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path in {"", "/"}:
+            respond_html(self, dashboard_html())
+            return
+        if parsed.path == "/ui-data":
+            respond_json(self, build_ui_snapshot())
+            return
+        if parsed.path == "/favicon.ico":
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.end_headers()
+            return
         if parsed.path == "/healthz":
             state = load_state()
             respond_json(
@@ -313,6 +831,15 @@ class Handler(BaseHTTPRequestHandler):
                 task["status"] = "pending"
                 task["received_at"] = utc_now()
                 save_json(TASK_PATH, task)
+                append_event(
+                    "architect",
+                    "task_received",
+                    task_id=task["task_id"],
+                    title=task.get("title"),
+                    message="架构师派发任务",
+                    goal=task.get("goal"),
+                    status="pending",
+                )
                 state.update(
                     {
                         "status": "pending",
@@ -335,6 +862,7 @@ def main() -> int:
     ensure_dir(RESULTS_DIR)
     if not STATE_PATH.exists():
         save_state(default_state())
+    append_event("server", "service_started", status=load_state().get("status"), summary="executor service started")
     thread = threading.Thread(target=worker_loop, daemon=True)
     thread.start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)

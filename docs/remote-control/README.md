@@ -47,6 +47,18 @@ Verify the local health endpoint on the server:
 curl http://127.0.0.1:18789/healthz
 ```
 
+The executor root path now serves a simple status UI:
+
+```bash
+curl http://127.0.0.1:18789/
+```
+
+For raw page data:
+
+```bash
+curl http://127.0.0.1:18789/ui-data
+```
+
 ### 2. On the local architect machine
 
 Set environment variables:
