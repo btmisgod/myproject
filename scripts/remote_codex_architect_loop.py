@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ def default_policy() -> dict[str, Any]:
         "design_review_after_repairs": 3,
         "max_repairs": 5,
         "result_history_limit": 3,
+        "stale_task_minutes": 25,
     }
 
 
@@ -220,6 +222,29 @@ def compact_signature(text: str) -> str:
     return sha1(normalized.encode("utf-8")).hexdigest()[:12]
 
 
+def objective_marker(objective: dict[str, Any]) -> str:
+    phase = active_phase(objective)
+    payload = {
+        "title": objective.get("title"),
+        "goal": objective.get("goal"),
+        "current_phase_index": objective.get("current_phase_index"),
+        "phase_id": phase.get("phase_id"),
+        "phase_goal": phase.get("goal"),
+        "phase_acceptance": phase.get("acceptance") or [],
+        "phase_constraints": phase.get("constraints") or [],
+    }
+    return sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def derive_bug_signature(latest_result: dict[str, Any], current_task: dict[str, Any]) -> str:
     task_id = str((latest_result.get("task_id") or current_task.get("task_id") or "")).strip().lower()
     blocker = str(latest_result.get("blocker") or "").strip()
@@ -252,6 +277,21 @@ def ensure_state_snapshot(objective: dict[str, Any], phase: dict[str, Any]) -> d
     snapshot = load_json(STATE_PATH, {})
     snapshot.setdefault("repair_tracker", {})
     snapshot.setdefault("last_observed", {})
+    marker = objective_marker(objective)
+    previous_marker = snapshot.get("objective_marker")
+    if previous_marker != marker:
+        snapshot["last_handled_result_key"] = None
+        snapshot["repair_tracker"] = {
+            "active_signature": None,
+            "narrow_operations": 0,
+            "fix_operations": 0,
+            "repair_cycles": 0,
+            "cycle_has_fix": False,
+            "last_result_key": None,
+            "last_reset_reason": "objective changed",
+            "updated_at": utc_now(),
+        }
+    snapshot["objective_marker"] = marker
     snapshot.update(
         {
             "objective_title": objective.get("title"),
@@ -283,6 +323,8 @@ def mark_result_handled(latest_result: dict[str, Any]) -> None:
         return
     snapshot = load_json(STATE_PATH, {})
     snapshot["last_handled_result_key"] = key
+    objective = normalize_objective(load_json(OBJECTIVE_PATH, {}))
+    snapshot["last_handled_result_marker"] = objective_marker(objective) if objective else None
     save_json(STATE_PATH, snapshot)
 
 
@@ -291,14 +333,38 @@ def should_skip_codex(server_state: dict[str, Any], current_task: dict[str, Any]
     last_observed = snapshot.get("last_observed", {})
     current_task_key = task_key(current_task)
     latest_result_key = result_key(latest_result)
+    current_marker = objective_marker(normalize_objective(load_json(OBJECTIVE_PATH, {})))
     if server_state.get("status") in {"running", "pending"}:
         if current_task_key and current_task_key == last_observed.get("current_task_key"):
             return True, "task still running with no visible state change"
     handled_result_key = snapshot.get("last_handled_result_key")
-    if server_state.get("status") == "ready" and latest_result_key and latest_result_key == handled_result_key:
+    handled_marker = snapshot.get("last_handled_result_marker")
+    if (
+        server_state.get("status") == "ready"
+        and latest_result_key
+        and latest_result_key == handled_result_key
+        and handled_marker == current_marker
+    ):
         if not current_task or current_task.get("status") in {None, "", "completed", "blocked", "partial"}:
             return True, "no new result since last handled outcome"
     return False, ""
+
+
+def stale_running_reason(objective: dict[str, Any], server_state: dict[str, Any], current_task: dict[str, Any]) -> str:
+    policy = objective.get("controller_policy") or default_policy()
+    stale_minutes = int(policy.get("stale_task_minutes") or 25)
+    if server_state.get("status") not in {"running", "pending"}:
+        return ""
+    started_at = parse_iso(str(current_task.get("started_at") or server_state.get("last_task_started_at") or ""))
+    if started_at is None:
+        return ""
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    age_seconds = (datetime.now(timezone.utc) - started_at.astimezone(timezone.utc)).total_seconds()
+    if age_seconds < stale_minutes * 60:
+        return ""
+    task_id = str(current_task.get("task_id") or server_state.get("current_task_id") or "unknown-task")
+    return f"task {task_id} exceeded stale running threshold ({stale_minutes}m)"
 
 
 def reset_repair_tracker(reason: str) -> None:
@@ -433,6 +499,9 @@ def parse_json_message(text: str) -> dict:
 
 
 def codex_decide(prompt: str) -> dict:
+    previous_mtime = LAST_MESSAGE_PATH.stat().st_mtime if LAST_MESSAGE_PATH.exists() else None
+    if LAST_MESSAGE_PATH.exists():
+        LAST_MESSAGE_PATH.unlink()
     cmd = [
         CODEX_BIN,
         "exec",
@@ -447,7 +516,16 @@ def codex_decide(prompt: str) -> dict:
     output = summarize_completed(proc)
     if proc.returncode != 0:
         raise RuntimeError(output or f"codex exec failed with {proc.returncode}")
-    final_message = read_text(LAST_MESSAGE_PATH, output)
+    if LAST_MESSAGE_PATH.exists():
+        current_mtime = LAST_MESSAGE_PATH.stat().st_mtime
+        if previous_mtime is None or current_mtime != previous_mtime:
+            final_message = read_text(LAST_MESSAGE_PATH, output)
+        else:
+            final_message = output
+    else:
+        final_message = output
+    if not final_message.strip():
+        raise RuntimeError("codex exec produced no new decision output")
     return parse_json_message(final_message)
 
 
@@ -464,6 +542,12 @@ def loop_once() -> bool:
     current_task = http_request("GET", "/api/v1/task").get("task", {})
     latest_results = http_request("GET", "/api/v1/results?limit=1").get("results", [])
     latest_result = latest_results[0] if latest_results else {}
+    stale_reason = stale_running_reason(objective, state, current_task)
+    if stale_reason:
+        http_request("POST", "/api/v1/admin/reset-running-task", {"reason": stale_reason})
+        write_state("idle", stale_reason)
+        update_last_observed(state, current_task, latest_result)
+        return False
     maybe_track_failure(latest_result)
     hard_block, hard_reason = enforce_failure_limits(objective, latest_result)
     if hard_block:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -57,6 +58,13 @@ def auth_token() -> str:
 
 AUTH_TOKEN = auth_token()
 EXECUTOR_LOCK = threading.Lock()
+ACTIVE_EXECUTION_LOCK = threading.Lock()
+ACTIVE_EXECUTION: dict[str, Any] = {
+    "task_id": None,
+    "process": None,
+    "cancel_requested": False,
+    "cancel_reason": None,
+}
 
 
 def default_state() -> dict[str, Any]:
@@ -179,6 +187,47 @@ def append_event(source: str, kind: str, **payload: Any) -> None:
     }
     with EVENTS_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def set_active_execution(task_id: str, process: subprocess.Popen[str]) -> None:
+    with ACTIVE_EXECUTION_LOCK:
+        ACTIVE_EXECUTION["task_id"] = task_id
+        ACTIVE_EXECUTION["process"] = process
+        ACTIVE_EXECUTION["cancel_requested"] = False
+        ACTIVE_EXECUTION["cancel_reason"] = None
+
+
+def clear_active_execution(task_id: str) -> None:
+    with ACTIVE_EXECUTION_LOCK:
+        if ACTIVE_EXECUTION.get("task_id") != task_id:
+            return
+        ACTIVE_EXECUTION["task_id"] = None
+        ACTIVE_EXECUTION["process"] = None
+        ACTIVE_EXECUTION["cancel_requested"] = False
+        ACTIVE_EXECUTION["cancel_reason"] = None
+
+
+def request_cancel_active_execution(reason: str) -> tuple[bool, str]:
+    with ACTIVE_EXECUTION_LOCK:
+        task_id = str(ACTIVE_EXECUTION.get("task_id") or "")
+        process = ACTIVE_EXECUTION.get("process")
+        if not task_id:
+            return False, "no active execution"
+        ACTIVE_EXECUTION["cancel_requested"] = True
+        ACTIVE_EXECUTION["cancel_reason"] = reason
+    if process is not None and process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            pass
+    return True, task_id
+
+
+def active_cancel_state(task_id: str) -> tuple[bool, str]:
+    with ACTIVE_EXECUTION_LOCK:
+        if ACTIVE_EXECUTION.get("task_id") != task_id:
+            return False, ""
+        return bool(ACTIVE_EXECUTION.get("cancel_requested")), str(ACTIVE_EXECUTION.get("cancel_reason") or "")
 
 
 def load_events(limit: int = 120) -> list[dict[str, Any]]:
@@ -665,8 +714,60 @@ def execute_task(task: dict[str, Any]) -> dict[str, Any]:
         str(message_path),
         "-",
     ]
-    proc = run_command(cmd, cwd=workspace, timeout=CODEX_TIMEOUT_SECONDS, stdin_text=prompt + "\n")
-    output = summarize_completed(proc)
+    proc = subprocess.Popen(
+        cmd,
+        cwd=workspace,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    set_active_execution(task_id, proc)
+    stdout = ""
+    stderr = ""
+    prompt_text = prompt + "\n"
+    started = time.monotonic()
+    try:
+        while True:
+            cancelled, cancel_reason = active_cancel_state(task_id)
+            if cancelled and proc.poll() is None:
+                try:
+                    proc.terminate()
+                except OSError:
+                    pass
+            elapsed = time.monotonic() - started
+            remaining = CODEX_TIMEOUT_SECONDS - elapsed
+            if remaining <= 0:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                raise subprocess.TimeoutExpired(cmd, CODEX_TIMEOUT_SECONDS)
+            try:
+                stdout, stderr = proc.communicate(prompt_text, timeout=min(POLL_SECONDS, max(1, remaining)))
+                break
+            except subprocess.TimeoutExpired:
+                prompt_text = None
+                state = load_state()
+                state["last_heartbeat_at"] = utc_now()
+                save_state(state)
+                continue
+        output = "\n".join(part for part in [(stdout or "").strip(), (stderr or "").strip()] if part).strip()
+        cancelled, cancel_reason = active_cancel_state(task_id)
+        if cancelled:
+            return {
+                "task_status": "blocked",
+                "summary": "executor cancelled a stale running task",
+                "changed_files": [],
+                "commands": cmd,
+                "tests": [],
+                "blocker": cancel_reason or "task cancelled by executor admin reset",
+            }
+        completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+    finally:
+        clear_active_execution(task_id)
     final_message = read_text(message_path, output)
     try:
         result = parse_json_message(final_message)
@@ -749,12 +850,45 @@ def finish_task(task: dict[str, Any], result: dict[str, Any]) -> None:
     )
 
 
+def force_reset_current_task(reason: str) -> dict[str, Any]:
+    task = load_json(TASK_PATH, {})
+    state = load_state()
+    task_id = str(task.get("task_id") or state.get("current_task_id") or "")
+    status = str(task.get("status") or state.get("status") or "")
+    if not task_id or status not in {"pending", "running"}:
+        return {"ok": True, "reset": False, "message": "no active task to reset"}
+    requested, active_task_id = request_cancel_active_execution(reason)
+    if requested:
+        return {"ok": True, "reset": True, "message": f"cancel requested for {active_task_id}", "task_id": active_task_id}
+    synthetic_task = dict(task or {})
+    synthetic_task["task_id"] = task_id
+    synthetic_task["title"] = synthetic_task.get("title") or task_id
+    synthetic_task["status"] = "blocked"
+    synthetic_task["finished_at"] = utc_now()
+    result = {
+        "task_status": "blocked",
+        "summary": "executor reset a stale pending/running task before execution",
+        "changed_files": [],
+        "commands": [],
+        "tests": [],
+        "blocker": reason,
+        "task_id": task_id,
+        "worker_id": WORKER_ID,
+        "requested_workspace": synthetic_task.get("cwd"),
+        "workspace": synthetic_task.get("cwd") or str(DEFAULT_WORKSPACE),
+        "executed_at": utc_now(),
+    }
+    finish_task(synthetic_task, result)
+    return {"ok": True, "reset": True, "message": f"reset stale task {task_id}", "task_id": task_id}
+
+
 def worker_loop() -> None:
     ensure_dir(RUNTIME_DIR)
     ensure_dir(RESULTS_DIR)
     if not STATE_PATH.exists():
         save_state(default_state())
     while True:
+        task_to_run: dict[str, Any] = {}
         with EXECUTOR_LOCK:
             state = load_state()
             state["last_heartbeat_at"] = utc_now()
@@ -762,8 +896,11 @@ def worker_loop() -> None:
             task = load_json(TASK_PATH, {})
             if task and task.get("status") == "pending":
                 mark_task_running(task)
-                result = execute_task(task)
-                finish_task(task, result)
+                task_to_run = load_json(TASK_PATH, {})
+        if task_to_run:
+            result = execute_task(task_to_run)
+            with EXECUTOR_LOCK:
+                finish_task(task_to_run, result)
         time.sleep(POLL_SECONDS)
 
 
@@ -814,6 +951,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if not require_auth(self):
+            return
+        if parsed.path == "/api/v1/admin/reset-running-task":
+            body = read_body(self)
+            reason = str(body.get("reason") or "architect requested stale task reset")
+            payload = force_reset_current_task(reason)
+            respond_json(self, payload)
             return
         if parsed.path == "/api/v1/task":
             task = read_body(self)
