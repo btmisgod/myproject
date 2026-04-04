@@ -20,6 +20,37 @@ It does **not** use GitHub control-plane docs as the high-frequency command chan
 - The local architect loop dispatches one task at a time.
 - The server runs local Codex to execute that task and stores the result.
 
+## Controller behavior
+
+The local architect loop is intentionally conservative:
+
+- It supports ordered multi-phase objectives.
+- It does not treat one finished subtask as completion of the whole objective.
+- It prefers local cheap-path decisions when:
+  - the server is still running the same task,
+  - there is no new result,
+  - or the latest result has already been handled.
+- It hard-blocks immediately on infrastructure/auth failures such as `401 Unauthorized` instead of repeatedly burning tokens.
+- It tracks repeated bug work with controller policy limits.
+
+Default controller policy:
+
+```json
+{
+  "max_narrow_operations": 3,
+  "max_fix_operations": 3,
+  "design_review_after_repairs": 3,
+  "max_repairs": 5
+}
+```
+
+Meaning:
+
+- the same bug may use at most 3 narrowing operations before blocking,
+- once the blocker is narrowed, the same point may use at most 3 fix attempts,
+- after 3 repair cycles the controller should stop and require design review,
+- after 5 repair cycles the controller must stop and mark a blocker.
+
 ## Recommended port
 
 - Default: `18789`
@@ -118,6 +149,22 @@ Example `objective.json`:
   ],
   "current_phase_index": 0,
   "phase_history": []
+}
+```
+
+You can also add optional long-running controller metadata:
+
+```json
+{
+  "controller_policy": {
+    "max_narrow_operations": 3,
+    "max_fix_operations": 3,
+    "design_review_after_repairs": 3,
+    "max_repairs": 5
+  },
+  "design_docs": [
+    "/absolute/path/to/design.md"
+  ]
 }
 ```
 
