@@ -117,6 +117,8 @@ class WebhookDeliveryAdapter:
                 "author": {"agent_id": envelope.source_agent},
                 "flow_type": envelope.payload.get("flow_type", "run"),
                 "message_type": envelope.payload.get("message_type", "analysis"),
+                "status_block": envelope.payload.get("status_block") or envelope.status_block,
+                "context_block": envelope.payload.get("context_block") or envelope.context_block,
                 "relations": {
                     "thread_id": envelope.thread_id,
                     "parent_message_id": envelope.payload.get("parent_message_id"),

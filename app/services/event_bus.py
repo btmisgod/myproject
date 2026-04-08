@@ -60,6 +60,40 @@ async def append_event(
     return event
 
 
+def plain_event_snapshot(event: Event | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(event, dict):
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        return {
+            "sequence_id": int(event.get("sequence_id") or 0),
+            "event_id": event.get("event_id"),
+            "group_id": event.get("group_id"),
+            "event_type": event.get("event_type"),
+            "aggregate_type": event.get("aggregate_type"),
+            "aggregate_id": event.get("aggregate_id"),
+            "actor_agent_id": event.get("actor_agent_id"),
+            "payload": payload,
+            "created_at": event.get("created_at"),
+        }
+    payload = getattr(event, "payload", None)
+    return {
+        "sequence_id": int(getattr(event, "sequence_id", 0) or 0),
+        "event_id": getattr(event, "event_id", None),
+        "group_id": getattr(event, "group_id", None),
+        "event_type": getattr(event, "event_type", None),
+        "aggregate_type": getattr(event, "aggregate_type", None),
+        "aggregate_id": getattr(event, "aggregate_id", None),
+        "actor_agent_id": getattr(event, "actor_agent_id", None),
+        "payload": payload if isinstance(payload, dict) else {},
+        "created_at": getattr(event, "created_at", None),
+    }
+
+
+async def stabilize_event_snapshot(session: AsyncSession, event: Event | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(event, Event):
+        await session.refresh(event)
+    return plain_event_snapshot(event)
+
+
 def _json_dumps(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str)
 
@@ -126,7 +160,7 @@ def _should_emit_canonicalized_echo(message: dict[str, Any] | None) -> bool:
     return bool(metadata.get("debug_outbound_echo") or metadata.get("debug_outbound_canonicalized"))
 
 
-def _sender_receipt_payload(event: Event, projection: Any, status: str = "accepted") -> dict[str, Any] | None:
+def _sender_receipt_payload(event: dict[str, Any], projection: Any, status: str = "accepted") -> dict[str, Any] | None:
     message = _message_entity(projection)
     if not message:
         return None
@@ -144,21 +178,21 @@ def _sender_receipt_payload(event: Event, projection: Any, status: str = "accept
             "source": "community",
         },
         "projection_result": {
-            "projected_public_event_type": event.event_type,
+            "projected_public_event_type": str(event.get("event_type") or ""),
             "projected": success,
         },
-        "timestamp": _timestamp(getattr(event, "created_at", None)),
+        "timestamp": _timestamp(event.get("created_at")),
         "non_intake": True,
         "debug": False,
     }
     receipt_event = {
-        "sequence_id": getattr(event, "sequence_id", 0) or 0,
-        "event_id": str(getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
-        "group_id": str(event.group_id),
-        "event_type": SENDER_RECEIPT_EVENT_TYPES.get(event.event_type, "message.accepted"),
+        "sequence_id": int(event.get("sequence_id") or 0),
+        "event_id": str(event.get("event_id") or _message_id(message) or uuid.uuid4()),
+        "group_id": str(event.get("group_id")),
+        "event_type": SENDER_RECEIPT_EVENT_TYPES.get(str(event.get("event_type") or ""), "message.accepted"),
         "aggregate_type": "sender_receipt",
         "aggregate_id": str(_message_id(message) or ""),
-        "actor_agent_id": str(event.actor_agent_id) if event.actor_agent_id else None,
+        "actor_agent_id": str(event.get("actor_agent_id")) if event.get("actor_agent_id") else None,
         "payload": {"receipt": receipt},
         "created_at": receipt["timestamp"],
     }
@@ -168,23 +202,23 @@ def _sender_receipt_payload(event: Event, projection: Any, status: str = "accept
         "projection_type": "sender_receipt",
         "projection": {"type": "sender_receipt", "version": 2 if settings.webhook_receipt_v2 else 1},
         "version": 2 if settings.webhook_receipt_v2 else 1,
-        "group_id": str(event.group_id),
+        "group_id": str(event.get("group_id")),
     }
 
 
-def _sender_canonicalized_payload(event: Event, projection: Any) -> dict[str, Any] | None:
+def _sender_canonicalized_payload(event: dict[str, Any], projection: Any) -> dict[str, Any] | None:
     message = _message_entity(projection)
     if not message or not _should_emit_canonicalized_echo(message):
         return None
     client_request_id = _client_request_id(message)
     debug_event = {
-        "sequence_id": getattr(event, "sequence_id", 0) or 0,
-        "event_id": str(getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
-        "group_id": str(event.group_id),
+        "sequence_id": int(event.get("sequence_id") or 0),
+        "event_id": str(event.get("event_id") or _message_id(message) or uuid.uuid4()),
+        "group_id": str(event.get("group_id")),
         "event_type": DEBUG_CANONICALIZED_EVENT_TYPE,
         "aggregate_type": "sender_debug",
         "aggregate_id": str(_message_id(message) or ""),
-        "actor_agent_id": str(event.actor_agent_id) if event.actor_agent_id else None,
+        "actor_agent_id": str(event.get("actor_agent_id")) if event.get("actor_agent_id") else None,
         "payload": {
             "receipt": {
                 "client_request_id": client_request_id,
@@ -193,12 +227,12 @@ def _sender_canonicalized_payload(event: Event, projection: Any) -> dict[str, An
                 "thread_id": _message_thread_id(message),
                 "status": "projected",
                 "success": True,
-                "timestamp": _timestamp(getattr(event, "created_at", None)),
+                "timestamp": _timestamp(event.get("created_at")),
                 "non_intake": True,
                 "debug": True,
             }
         },
-        "created_at": _timestamp(getattr(event, "created_at", None)),
+        "created_at": _timestamp(event.get("created_at")),
     }
     return {
         "event": debug_event,
@@ -209,23 +243,24 @@ def _sender_canonicalized_payload(event: Event, projection: Any) -> dict[str, An
         "projection_type": "sender_debug",
         "projection": {"type": "sender_debug", "version": 2 if settings.webhook_receipt_v2 else 1},
         "version": 2 if settings.webhook_receipt_v2 else 1,
-        "group_id": str(event.group_id),
+        "group_id": str(event.get("group_id")),
     }
 
 
-async def publish_event(event: Event) -> None:
-    projection = web_projector.to_publishable(event)
+async def publish_event(event: Event | dict[str, Any]) -> None:
+    plain_event = plain_event_snapshot(event)
+    projection = web_projector.to_publishable(plain_event)
     payload_json = projection.model_dump_json()
-    await redis_client.publish(group_stream_channel(event.group_id), projection.model_dump_json())
-    await deliver_group_webhooks(event.group_id, payload_json)
-    await deliver_agent_webhooks(event, projection)
-    console_projector.project(event)
+    await redis_client.publish(group_stream_channel(plain_event["group_id"]), payload_json)
+    await deliver_group_webhooks(plain_event["group_id"], payload_json)
+    await deliver_agent_webhooks(plain_event, projection)
+    console_projector.project(plain_event)
     logger.info(
         "event_published",
         extra={
-            "group_id": str(event.group_id),
-            "sequence_id": event.sequence_id,
-            "event_type": event.event_type,
+            "group_id": str(plain_event["group_id"]),
+            "sequence_id": plain_event["sequence_id"],
+            "event_type": plain_event["event_type"],
         },
     )
 
@@ -277,12 +312,12 @@ async def deliver_group_webhooks(group_id: uuid.UUID, payload_json: str) -> None
                 )
 
 
-async def deliver_agent_webhooks(event: Event, projection: Any) -> None:
-    group_id = event.group_id
+async def deliver_agent_webhooks(event: dict[str, Any], projection: Any) -> None:
+    group_id = event["group_id"]
     public_payload_json = projection.model_dump_json()
     sender_receipt = _sender_receipt_payload(event, projection)
     sender_debug = _sender_canonicalized_payload(event, projection)
-    sender_agent_id = str(event.actor_agent_id) if event.actor_agent_id else None
+    sender_agent_id = str(event.get("actor_agent_id")) if event.get("actor_agent_id") else None
 
     async with SessionLocal() as session:
         stmt = (

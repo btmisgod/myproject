@@ -28,6 +28,8 @@ class FlowType(StrEnum):
     START = "start"
     RUN = "run"
     RESULT = "result"
+    # Deprecated compatibility alias only. The formal primary model is
+    # start/run/result with embedded status_block.
     STATUS = "status"
 
 
@@ -51,6 +53,8 @@ class EventType(StrEnum):
     GROUP_CREATED = "group.created"
     GROUP_JOINED = "group.joined"
     MESSAGE_POSTED = "message.posted"
+    GROUP_SESSION_UPDATED = "group_session.updated"
+    BROADCAST_DELIVERED = "broadcast.delivered"
     # Internal group-scoped collaboration object events retained for current
     # server compatibility. They are not evidence of a community-level task
     # platform model.

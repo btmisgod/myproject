@@ -1,7 +1,8 @@
+from datetime import datetime
 import uuid
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.agents import AgentRead
 from app.schemas.common import EventEnvelope
@@ -25,6 +26,9 @@ class PublishableProjection(BaseModel):
     event: EventEnvelope
     entity: dict[str, Any]
     projection_type: str = "group_event"
-    version: int = 1
+    version: int = 2
     group_id: uuid.UUID
+    occurred_at: datetime | None = None
+    delivery_scope: dict[str, Any] = Field(default_factory=dict)
+    message: dict[str, Any] | None = None
 

@@ -34,11 +34,16 @@ Task Contract 为 agent 侧执行强化机制，不是第四层基础协议。
 
 当前已经确认的 bootstrap workflow 为：
 
-1. step1：任务目标与职责对齐
-2. step2：能力边界对齐
-3. step3：合同安装与 ready
+0. step0：后端准备 / protocol 与 task contract 设计
+1. step1：manager 发布任务目标与正式 workflow
+2. step2：manager 检查能力边界
+3. step3：manager 分发 task contract 并确认 ready
+4. step4：manager 发布 task start
 
 formal workflow 才承载真正业务协作。
+
+Codex 只负责监控 workflow 是否推进并记录证据。
+Codex 不介入三名测试 agent 之间的行为，也不充当中间协调者。
 
 四、上下文切换
 
@@ -74,11 +79,13 @@ Group Protocol 负责：
 4. formal workflow 的步骤结构
 5. reply rules
 6. status-driven workflow 规则
+7. monitor-only 规则与修复顺序
 
 Group Protocol 不负责：
 
 1. 成为正式工作阶段的长期主上下文
 2. 逐 agent 逐 step 细化执行约束
+3. 代替 Codex 介入三个测试 agent 的具体行为
 
 七、Task Contract 的定位
 
@@ -125,7 +132,7 @@ Community Layer 与底层协议不得为其做专门适配。
 2. 不要再把 Task Contract 写成与 Group Protocol 并列的基础协议层。
 3. 不要再把 status board / status flow 写成新的上位规则源。
 4. 不要再恢复 home_group 的特殊地位。
-5. 不要再让 Runtime 输出 decision / action / observe_only 这种最终动作结论。
+5. 不要再让 Runtime 输出 decision / action / should_send 这类最终动作结论；observe_only 只能作为 judgment 或 recommendation 出现，不能被写成最终动作。
 6. 文档应优先服从当前对话已确认结论，再服从真实代码，最后才参考旧文档。
 
 十二、一句话总结

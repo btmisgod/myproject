@@ -30,7 +30,14 @@ from app.schemas.tasks import (
 )
 from app.schemas.webhooks import WebhookSubscriptionCreate
 from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
-from app.services.event_bus import append_event, publish_event
+from app.services.event_bus import append_event, publish_event, stabilize_event_snapshot
+from app.services.group_session import (
+    build_group_session_view,
+    ensure_group_session_fact,
+    group_session_event_payload,
+    sync_agent_session,
+    update_group_session_from_message,
+)
 from app.services.message_envelope import MessageEnvelope, MessageMention, MessageTarget, envelope_timestamp_now
 from app.services.message_protocol_mapper import normalize_message_to_canonical_v2, serialize_message_v2
 from app.services.protocol_validation_hook import _deliver_protocol_violation_feedback, _load_channel_protocol_context
@@ -144,6 +151,13 @@ def ensure_agent_protocol_ready(actor: Any) -> None:
     )
 
 
+async def _publish_plain_events(session: AsyncSession, *events: Any) -> None:
+    for event in events:
+        if event is None:
+            continue
+        await publish_event(await stabilize_event_snapshot(session, event))
+
+
 def _message_mentions_from_payload(payload: dict[str, Any] | None) -> list[MessageMention]:
     if not isinstance(payload, dict):
         return []
@@ -189,6 +203,26 @@ def _message_target_from_payload(payload: dict[str, Any] | None) -> MessageTarge
     return MessageTarget(target_scope="agent", target_agent_id=target_agent_id)
 
 
+def _is_system_broadcast_message(message: dict[str, Any] | None) -> bool:
+    if not isinstance(message, dict):
+        return False
+    # Formal mainline: only explicit trusted system authors may create system
+    # broadcasts. broadcast/system_broadcast/group_broadcast flags remain
+    # compatibility hints only and must not upgrade a normal agent message.
+    return str(message.get("author_kind") or "").strip().lower() == "system"
+
+
+def _structured_message_block(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return {key: item for key, item in value.items() if item is not None}
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(mode="json", exclude_none=True)
+        if isinstance(dumped, dict):
+            return dumped
+    return {}
+
+
 async def _validate_protocol_action(
     *,
     action_type: str,
@@ -227,7 +261,7 @@ async def _validate_protocol_action(
                 message_id=str(uuid.uuid4()),
                 category="channel_message",
                 event_type="message.posted",
-                channel_id=str(group.id),
+                group_id=str(group.id),
                 payload=payload,
                 priority="normal",
                 timestamp=envelope_timestamp_now(),
@@ -311,6 +345,7 @@ async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent
     )
     session.add(group)
     await session.flush()
+    ensure_group_session_fact(group)
 
     membership = GroupMembership(group_id=group.id, agent_id=actor.id, role="member")
     presence = Presence(
@@ -328,14 +363,24 @@ async def create_group(session: AsyncSession, payload: GroupCreate, actor: Agent
         actor_agent_id=actor.id,
         payload={"group": group_payload(group)},
     )
+    group_session_event = await append_event(
+        session,
+        group_id=group.id,
+        event_type=EventType.GROUP_SESSION_UPDATED.value,
+        aggregate_type="group_session",
+        aggregate_id=group.id,
+        actor_agent_id=actor.id,
+        payload=group_session_event_payload(group),
+    )
     await session.commit()
     await session.refresh(group)
-    await publish_event(event)
+    await _publish_plain_events(session, event, group_session_event)
     return group
 
 
 async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent) -> GroupMembership:
     group = await get_group_or_404(session, group_id)
+    ensure_group_session_fact(group)
     existing = await session.scalar(
         select(GroupMembership).where(
             GroupMembership.group_id == group.id,
@@ -357,19 +402,91 @@ async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent) -
         actor_agent_id=actor.id,
         payload={"agent_id": str(actor.id)},
     )
+    group_session_event = await append_event(
+        session,
+        group_id=group.id,
+        event_type=EventType.GROUP_SESSION_UPDATED.value,
+        aggregate_type="group_session",
+        aggregate_id=group.id,
+        actor_agent_id=actor.id,
+        payload=group_session_event_payload(group),
+    )
     await session.commit()
     await session.refresh(membership)
-    await publish_event(event)
+    await _publish_plain_events(session, event, group_session_event)
     return membership
 
 
 async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any) -> Message:
     principal = _principal_agent(actor)
     group = await get_group_or_404(session, payload.group_id)
-    await ensure_membership(session, payload.group_id, principal.id)
-    ensure_agent_protocol_ready(actor)
-    canonical_message_v2 = normalize_message_to_canonical_v2(payload.model_dump(mode="json"))
+    payload_dump = payload.model_dump(mode="json")
+    canonical_message_v2 = normalize_message_to_canonical_v2(payload_dump)
+    # MessageCreate has already passed server-side normalization once. Keep its
+    # validated formal fields authoritative here so a second compatibility pass
+    # does not erase trusted system/group_context ingestion before persistence.
+    resolved_author_kind = str(payload.resolved_author_kind or canonical_message_v2.get("author_kind") or "").strip().lower()
+    if resolved_author_kind in {"agent", "system"}:
+        canonical_message_v2["author_kind"] = resolved_author_kind
+        canonical_author = canonical_message_v2.get("author") if isinstance(canonical_message_v2.get("author"), dict) else {}
+        canonical_message_v2["author"] = {**canonical_author, "author_kind": resolved_author_kind}
+    resolved_context_block = _structured_message_block(payload.context_block)
+    if resolved_context_block:
+        canonical_message_v2["context_block"] = resolved_context_block
+        canonical_content = canonical_message_v2.get("content") if isinstance(canonical_message_v2.get("content"), dict) else {}
+        canonical_message_v2["content"] = {**canonical_content, "context_block": resolved_context_block}
     validation_payload = canonical_message_v2
+    requested_system_broadcast = canonical_message_v2.get("author_kind") == "system"
+    trusted_system_broadcast = requested_system_broadcast and _is_admin_protocol_exempt(actor)
+    if requested_system_broadcast and not trusted_system_broadcast:
+        raise AppError(
+            "system broadcast requires trusted system actor",
+            code="system_broadcast_forbidden",
+            status_code=403,
+        )
+    if not trusted_system_broadcast:
+        await ensure_membership(session, payload.group_id, principal.id)
+    ensure_agent_protocol_ready(actor)
+    broadcast_message = trusted_system_broadcast and _is_system_broadcast_message(canonical_message_v2)
+    payload_context_block = _structured_message_block(payload.context_block)
+    dumped_context_block = payload_dump.get("context_block") if isinstance(payload_dump.get("context_block"), dict) else {}
+    canonical_context_block = (
+        canonical_message_v2.get("context_block") if isinstance(canonical_message_v2.get("context_block"), dict) else {}
+    )
+    if resolved_author_kind == "system" or payload_context_block or dumped_context_block or canonical_context_block:
+        logger.warning(
+            "community_post_message_ingress_probe",
+            extra={
+                "ingress_probe": {
+                    "actor_type": getattr(actor, "actor_type", None),
+                    "requested_system_broadcast": requested_system_broadcast,
+                    "trusted_system_broadcast": trusted_system_broadcast,
+                    "broadcast_message": broadcast_message,
+                    "payload": {
+                        "author_kind": payload.author_kind,
+                        "author": {
+                            "author_kind": payload.author.author_kind,
+                            "agent_id": str(payload.author.agent_id) if payload.author.agent_id else None,
+                        },
+                        "context_block": payload_context_block,
+                    },
+                    "payload_model_dump": {
+                        "author_kind": payload_dump.get("author_kind"),
+                        "author": payload_dump.get("author") if isinstance(payload_dump.get("author"), dict) else {},
+                        "context_block": dumped_context_block,
+                    },
+                    "canonical_message_v2": {
+                        "author_kind": canonical_message_v2.get("author_kind"),
+                        "author": (
+                            canonical_message_v2.get("author")
+                            if isinstance(canonical_message_v2.get("author"), dict)
+                            else {}
+                        ),
+                        "context_block": canonical_context_block,
+                    },
+                }
+            },
+        )
 
     await _validate_protocol_action(
         action_type="message.post",
@@ -392,12 +509,16 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
 
     message = Message(
         group_id=payload.group_id,
-        agent_id=principal.id,
+        agent_id=None if broadcast_message else principal.id,
         parent_message_id=resolved_parent_id,
         thread_id=resolved_thread_id,
         flow_type=canonical_message_v2["flow_type"],
         message_type=canonical_message_v2.get("message_type"),
-        content=canonical_message_v2["content"],
+        content={
+            **canonical_message_v2["content"],
+            "status_block": canonical_message_v2.get("status_block") or {},
+            "context_block": canonical_message_v2.get("context_block") or {},
+        },
         semantics_json={
             "flow_type": canonical_message_v2["flow_type"],
             "message_type": canonical_message_v2.get("message_type"),
@@ -411,18 +532,35 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
         message.thread_id = message.id
         await session.flush()
     await session.refresh(message)
+    update_group_session_from_message(
+        group,
+        canonical_message_v2,
+        message_id=message.id,
+        actor_agent_id=None if broadcast_message else principal.id,
+    )
 
     event = await append_event(
         session,
         group_id=payload.group_id,
-        event_type=EventType.MESSAGE_POSTED.value,
+        event_type=EventType.BROADCAST_DELIVERED.value if broadcast_message else EventType.MESSAGE_POSTED.value,
         aggregate_type="message",
         aggregate_id=message.id,
-        actor_agent_id=principal.id,
+        actor_agent_id=None if broadcast_message else principal.id,
         payload={"message": message_payload(message)},
     )
+    group_session_event = None
+    if canonical_message_v2.get("status_block") or canonical_message_v2.get("context_block") or broadcast_message:
+        group_session_event = await append_event(
+            session,
+            group_id=payload.group_id,
+            event_type=EventType.GROUP_SESSION_UPDATED.value,
+            aggregate_type="group_session",
+            aggregate_id=group.id,
+            actor_agent_id=None if broadcast_message else principal.id,
+            payload=group_session_event_payload(group),
+    )
     await session.commit()
-    await publish_event(event)
+    await _publish_plain_events(session, event, group_session_event)
     return message
 
 
@@ -478,8 +616,7 @@ async def create_task(session: AsyncSession, payload: TaskCreate, actor: Any) ->
     )
     await session.commit()
     await session.refresh(task)
-    await publish_event(task_event)
-    await publish_event(message_event)
+    await _publish_plain_events(session, task_event, message_event)
     return task
 
 
@@ -525,8 +662,7 @@ async def claim_task(
     )
     await session.commit()
     await session.refresh(task)
-    await publish_event(task_event)
-    await publish_event(message_event)
+    await _publish_plain_events(session, task_event, message_event)
     return task
 
 
@@ -571,8 +707,7 @@ async def update_task_status(
     )
     await session.commit()
     await session.refresh(task)
-    await publish_event(task_event)
-    await publish_event(message_event)
+    await _publish_plain_events(session, task_event, message_event)
     return task
 
 
@@ -626,8 +761,7 @@ async def handoff_task(
     )
     await session.commit()
     await session.refresh(task)
-    await publish_event(task_event)
-    await publish_event(message_event)
+    await _publish_plain_events(session, task_event, message_event)
     return task
 
 
@@ -672,8 +806,7 @@ async def save_task_result(
     )
     await session.commit()
     await session.refresh(task)
-    await publish_event(task_event)
-    await publish_event(message_event)
+    await _publish_plain_events(session, task_event, message_event)
     return task
 
 
@@ -700,7 +833,7 @@ async def update_presence(session: AsyncSession, actor: Any, payload: PresenceUp
     )
     await session.commit()
     await session.refresh(presence)
-    await publish_event(event)
+    await _publish_plain_events(session, event)
     return presence
 
 
@@ -857,7 +990,16 @@ async def get_group_protocol(session: AsyncSession, group_id: uuid.UUID, actor: 
 async def get_group_context(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
     group = await get_group_or_404(session, group_id)
     await require_group_access(session, group_id, actor)
-    return group_context(group)
+    return {
+        **group_context(group),
+        "group_session": build_group_session_view(group),
+    }
+
+
+async def get_group_session(session: AsyncSession, group_id: uuid.UUID, actor: Any) -> dict[str, Any]:
+    group = await get_group_or_404(session, group_id)
+    await require_group_access(session, group_id, actor)
+    return build_group_session_view(group)
 
 
 async def get_agent_protocol_context(
@@ -1040,6 +1182,8 @@ async def create_evented_message(
     content: dict[str, Any] | str,
 ) -> tuple[Message, Event]:
     raw_content = content if isinstance(content, dict) else {"text": str(content or "")}
+    status_block = raw_content.get("status_block") if isinstance(raw_content.get("status_block"), dict) else {}
+    context_block = raw_content.get("context_block") if isinstance(raw_content.get("context_block"), dict) else {}
     message = Message(
         group_id=group_id,
         agent_id=actor_agent_id,
@@ -1052,6 +1196,8 @@ async def create_evented_message(
             "payload": raw_content.get("payload") if isinstance(raw_content.get("payload"), dict) else {},
             "blocks": raw_content.get("blocks") if isinstance(raw_content.get("blocks"), list) else [],
             "attachments": raw_content.get("attachments") if isinstance(raw_content.get("attachments"), list) else [],
+            "status_block": status_block,
+            "context_block": context_block,
         },
         semantics_json={"flow_type": flow_type, "message_type": message_type},
         routing_json={

@@ -42,6 +42,14 @@ def _action_type_from_envelope(envelope: MessageEnvelope) -> str:
 
 def _context_from_envelope(envelope: MessageEnvelope) -> dict[str, Any]:
     payload = envelope.payload if isinstance(envelope.payload, dict) else {}
+    status_block = envelope.status_block if isinstance(envelope.status_block, dict) else {}
+    context_block = envelope.context_block if isinstance(envelope.context_block, dict) else {}
+    payload_status_block = payload.get("status_block") if isinstance(payload.get("status_block"), dict) else {}
+    payload_context_block = payload.get("context_block") if isinstance(payload.get("context_block"), dict) else {}
+    if not status_block:
+        status_block = payload_status_block
+    if not context_block:
+        context_block = payload_context_block
     routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
     target = routing.get("target") if isinstance(routing.get("target"), dict) else {}
     payload_metadata = payload.get("metadata")
@@ -64,12 +72,14 @@ def _context_from_envelope(envelope: MessageEnvelope) -> dict[str, Any]:
     return {
         "category": envelope.category,
         "event_type": envelope.event_type,
-        "group_id": envelope.channel_id,
+        "group_id": envelope.group_id,
         "channel_id": envelope.channel_id,
         "thread_id": envelope.thread_id,
         "correlation_id": envelope.correlation_id,
         "message_type": payload.get("message_type"),
         "flow_type": payload.get("flow_type"),
+        "status_block": status_block,
+        "context_block": context_block,
         "intent": payload.get("intent") or message_metadata.get("intent"),
         "target_scope": envelope.target.target_scope if envelope.target else None,
         "target_agent_id": (
@@ -185,7 +195,7 @@ def _build_protocol_violation_payload(
         "event": {
             "sequence_id": 0,
             "event_id": str(uuid.uuid4()),
-            "group_id": envelope.channel_id,
+            "group_id": envelope.group_id,
             "event_type": "message.rejected",
             "aggregate_type": "sender_receipt",
             "aggregate_id": envelope.message_id,
@@ -196,7 +206,7 @@ def _build_protocol_violation_payload(
         "entity": {"receipt": receipt},
         "projection_type": "sender_receipt",
         "version": 1,
-        "group_id": envelope.channel_id,
+        "group_id": envelope.group_id,
     }
 
 
@@ -245,7 +255,7 @@ async def _deliver_protocol_violation_feedback(
         )
         return
 
-    target = await _resolve_agent_webhook_target(envelope.source_agent, envelope.channel_id)
+    target = await _resolve_agent_webhook_target(envelope.source_agent, envelope.group_id)
     if target is None:
         logger.warning(
             "protocol_violation_feedback_skipped",
@@ -263,7 +273,7 @@ async def _deliver_protocol_violation_feedback(
         message_id=str(uuid.uuid4()),
         category="system_event",
         event_type="message.rejected",
-        channel_id=envelope.channel_id,
+        group_id=envelope.group_id,
         payload={"receipt": payload.get("entity", {}).get("receipt", {})},
         priority="high",
         timestamp=envelope_timestamp_now(),
@@ -341,7 +351,7 @@ class ProtocolValidationHook:
             message_id=envelope.message_id,
             category=envelope.category,
             event_type=envelope.event_type,
-            channel_id=envelope.channel_id,
+            group_id=envelope.group_id,
             payload=envelope.payload,
             priority=envelope.priority,
             timestamp=envelope.timestamp,
@@ -364,11 +374,11 @@ class ProtocolValidationHook:
 
     async def validate(self, envelope: MessageEnvelope) -> ProtocolValidationResult:
         context = _context_from_envelope(envelope)
-        context.update(await _load_group_protocol_context(envelope.channel_id))
+        context.update(await _load_group_protocol_context(envelope.group_id))
         request = build_validation_request(
             action_type=_action_type_from_envelope(envelope),
             actor_id=envelope.source_agent or "community_system",
-            group_id=envelope.channel_id,
+            group_id=envelope.group_id,
             payload=envelope.payload,
             context=context,
         )

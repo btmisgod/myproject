@@ -1,4 +1,4 @@
-﻿{
+{
   "layer_id": "channel",
   "name": "群组协议模板",
   "status": "scaffold",
@@ -18,6 +18,139 @@
   ],
   "sections": {
     "objective": "定义当前 group 内生效的最小行为边界。",
+    "workflow": {
+      "callable_by_agents": true,
+      "call_surface": {
+        "agent_readable_paths": [
+          "workflow.bootstrap_workflow",
+          "workflow.monitoring_rules",
+          "workflow.formal_workflow"
+        ],
+        "monitoring_only_paths": [
+          "workflow.bootstrap_workflow.step0",
+          "workflow.bootstrap_workflow.step1",
+          "workflow.bootstrap_workflow.step2",
+          "workflow.bootstrap_workflow.step3",
+          "workflow.bootstrap_workflow.step4"
+        ]
+      },
+      "state_machine": {
+        "status_words": [
+          "pending",
+          "running",
+          "blocked",
+          "ready",
+          "completed"
+        ],
+        "terminal_states": [
+          "completed",
+          "blocked"
+        ],
+        "workflow_gate": [
+          "step0",
+          "step1",
+          "step2",
+          "step3",
+          "step4"
+        ]
+      },
+      "bootstrap_workflow": {
+        "step0": {
+          "title": "后端准备 / protocol 与 task contract 设计",
+          "owner": "backend-skill",
+          "type": "preparation",
+          "status": "pending",
+          "triggered_by": "protocol_repair_or_new_bootstrap",
+          "trigger_text": "后端先补协议和任务合同骨架，不介入三名测试 agent 的互动行为。",
+          "status_flow": [
+            "pending",
+            "running",
+            "completed",
+            "blocked"
+          ],
+          "next_step": "step1",
+          "codex_role": "observer_only"
+        },
+        "step1": {
+          "title": "manager 发布任务目标与正式 workflow",
+          "owner": "manager",
+          "type": "alignment",
+          "status": "pending"
+          ,"triggered_by": "manager_publish_goal"
+          ,"trigger_text": "manager 发布任务目标、角色和正式 workflow，workers 只确认理解，不做越界行为。",
+          "status_flow": [
+            "pending",
+            "running",
+            "completed",
+            "blocked"
+          ],
+          "next_step": "step2"
+        },
+        "step2": {
+          "title": "manager 检查能力边界",
+          "owner": "manager",
+          "type": "capability_check",
+          "status": "pending",
+          "triggered_by": "manager_check_capability",
+          "trigger_text": "manager 检查能力边界，workers 自检 skill、权限和执行范围。",
+          "status_flow": [
+            "pending",
+            "running",
+            "completed",
+            "blocked"
+          ],
+          "next_step": "step3"
+        },
+        "step3": {
+          "title": "manager 分发 task contract 并确认 ready",
+          "owner": "manager",
+          "type": "contract_install",
+          "status": "pending",
+          "triggered_by": "manager_distribute_contract",
+          "trigger_text": "manager 分发 task contract，workers 安装并确认本地可调用后进入 ready。",
+          "status_flow": [
+            "pending",
+            "running",
+            "ready",
+            "completed",
+            "blocked"
+          ],
+          "next_step": "step4"
+        },
+        "step4": {
+          "title": "manager 发布 task start",
+          "owner": "manager",
+          "type": "formal_start",
+          "status": "pending",
+          "triggered_by": "manager_publish_task_start",
+          "trigger_text": "step3 真实完成后，manager 发布 task start，正式 workflow 才开始。",
+          "status_flow": [
+            "pending",
+            "running",
+            "completed",
+            "blocked"
+          ],
+          "next_step": "formal_workflow"
+        }
+      },
+      "monitoring_rules": {
+        "codex_role": "observer_only",
+        "codex_must_not": [
+          "coach the three test agents",
+          "mediate the three test agents",
+          "rewrite agent behavior during execution"
+        ],
+        "codex_must": [
+          "observe progression",
+          "record evidence"
+        ],
+        "repair_order": [
+          "adjust group protocol first",
+          "then diagnose agent/community communication"
+        ]
+      },
+      "formal_workflow": {}
+    },
     "placeholders": {
       "group_boundary": [],
       "topic_description": [],

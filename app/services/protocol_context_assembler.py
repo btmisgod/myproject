@@ -67,11 +67,20 @@ def build_group_protocol_context(group: Group) -> dict[str, Any]:
 
 
 def build_group_context(group: Group) -> dict[str, Any]:
+    group_context = read_group_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug)
     return {
         "group_id": str(group.id),
         "group_name": group.name,
         "group_slug": group.slug,
-        "group_protocol": read_group_protocol_binding(group.metadata_json, group_name=group.name, group_slug=group.slug),
+        "group_protocol": group_context,
+        "group_context": group_context,
+        "context_block": {
+            "context_scope": "group",
+            "context_type": "group_context",
+            "group_context": group_context,
+            "channel_context": group_context,
+        },
+        "channel_context": group_context,
     }
 
 

@@ -54,17 +54,30 @@ class MessageEnvelope:
     message_id: str
     category: str
     event_type: str
-    channel_id: str
     payload: dict[str, Any]
     priority: str
     timestamp: str
+    # Formal mainline uses group_id. channel_id is retained below only as a
+    # deprecated compatibility alias for older adapters.
+    group_id: str | None = None
+    channel_id: str | None = None
     # Optional routing and relationship fields.
+    status_block: dict[str, Any] = field(default_factory=dict)
+    context_block: dict[str, Any] = field(default_factory=dict)
     source_agent: str | None = None
     target: MessageTarget | None = None
     mentions: list[MessageMention] = field(default_factory=list)
     correlation_id: str | None = None
     thread_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        resolved_group_id = str(self.group_id or self.channel_id or "").strip() or None
+        resolved_channel_id = str(self.channel_id or resolved_group_id or "").strip() or None
+        if resolved_group_id is None:
+            raise ValueError("group_id is required for MessageEnvelope")
+        object.__setattr__(self, "group_id", resolved_group_id)
+        object.__setattr__(self, "channel_id", resolved_channel_id)
 
 
 @dataclass(frozen=True)
@@ -106,7 +119,7 @@ def message_envelope_schema() -> dict[str, Any]:
             "message_id",
             "category",
             "event_type",
-            "channel_id",
+            "group_id",
             "payload",
             "priority",
             "timestamp",
@@ -115,7 +128,10 @@ def message_envelope_schema() -> dict[str, Any]:
             "message_id": {"type": "string"},
             "category": {"type": "string", "enum": list(MESSAGE_ENVELOPE_CATEGORIES)},
             "event_type": {"type": "string"},
-            "channel_id": {"type": "string"},
+            "group_id": {"type": ["string", "null"]},
+            # Deprecated compatibility alias. Formal producers should write
+            # group_id; channel_id is mirrored for legacy consumers.
+            "channel_id": {"type": ["string", "null"]},
             "source_agent": {"type": ["string", "null"]},
             "target": {
                 "type": ["object", "null"],
@@ -142,6 +158,8 @@ def message_envelope_schema() -> dict[str, Any]:
                 },
             },
             "payload": {"type": "object"},
+            "status_block": {"type": "object"},
+            "context_block": {"type": "object"},
             "priority": {"type": "string", "enum": list(MESSAGE_ENVELOPE_PRIORITIES)},
             "timestamp": {"type": "string", "format": "date-time"},
             "correlation_id": {"type": ["string", "null"]},

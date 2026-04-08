@@ -14,6 +14,7 @@ from app.services.community import (
     deactivate_webhook_subscription,
     get_group_by_slug_or_404,
     get_group_context,
+    get_group_session,
     get_group_protocol,
     join_group,
     require_group_access,
@@ -111,6 +112,17 @@ async def get_group_context_endpoint(
     return success(await get_group_context(session, group_id, actor))
 
 
+@router.get("/{group_id}/session", response_model=dict)
+async def get_group_session_endpoint(
+    group_id: uuid.UUID,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    return success(await get_group_session(session, group_id, actor))
+
+
+# Deprecated compatibility alias only. Formal server semantics use
+# /groups/{group_id}/context and group_* naming.
 @router.get("/{group_id}/channel-context", response_model=dict)
 async def get_group_channel_context_legacy_endpoint(
     group_id: uuid.UUID,
@@ -130,6 +142,18 @@ async def get_group_context_by_slug_endpoint(
     return success(await get_group_context(session, group.id, actor))
 
 
+@router.get("/by-slug/{slug}/session", response_model=dict)
+async def get_group_session_by_slug_endpoint(
+    slug: str,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    group = await get_group_by_slug_or_404(session, slug)
+    return success(await get_group_session(session, group.id, actor))
+
+
+# Deprecated compatibility alias only. Formal server semantics use
+# /groups/by-slug/{slug}/context and group_* naming.
 @router.get("/by-slug/{slug}/channel-context", response_model=dict)
 async def get_group_channel_context_by_slug_legacy_endpoint(
     slug: str,

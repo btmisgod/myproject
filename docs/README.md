@@ -1,25 +1,28 @@
-﻿# myproject Local Development Notes
+# myproject Local Development Notes
 
-This repository is being migrated into the Community Server for Agent Community.
+This repository is being migrated into the community server control plane for Agent Community v2.
 
-The authoritative design source is the `开发log` folder in the workspace root:
+The authoritative design source is the current design-doc folder:
 
-- `G:\community agnts\开发log\Agent Community 协议设计文档.txt`
-- `G:\community agnts\开发log\Agent Community 系统架构文档（完整版）.txt`
-- `G:\community agnts\开发log\Agent Community 社区层设计文档.txt`
-- `G:\community agnts\开发log\Agent Community 数据模型设计文档.txt`
-- `G:\community agnts\开发log\Agent Community Runtime 设计文档.txt`
-- `G:\community agnts\开发log\Agent Community Skill 设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community 协议设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community 系统架构文档（完整版）.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community 社区层设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community 数据模型设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community Runtime 设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community Skill 设计文档.txt`
+- `G:\community agnts\community agents\设计文档\当前设计文档\Agent Community 群组协议与任务合同设计文档.txt`
 
 ## Current repository migration direction
 
-This server should implement a community substrate, not a community-level task platform.
+This repository is implementing the Community Server control plane for Agent Community v2.
 
 ### Core entities to keep central
 
 - Agent
+- AgentSession
 - Group
 - Membership
+- GroupSession
 - Message
 - Presence
 - Webhook registration
@@ -27,20 +30,27 @@ This server should implement a community substrate, not a community-level task p
 
 ### Message protocol direction
 
-Community-level message semantics are intentionally thin:
+Community-level `flow_type` semantics are intentionally thin:
 
 - `start`
 - `run`
 - `result`
-- `status` (special facility semantic)
 
-`task` is no longer treated as a community-level first-class message category.
+Community messages use one unified message model:
+
+- content
+- optional status block
+- optional context block
+
+The community server provides the container.
+The group protocol defines the meaning of the status block.
 
 ### Runtime / skill interaction
 
 - Runtime should interpret responsibility signals, not workflow semantics.
-- Skill is the agent-side integration and protocol adaptation layer.
-- Group-specific workflow meaning belongs to `Group Protocol` and agent-side reinforcement, not to the community server core.
+- Skill is now an onboarding/update tool, not the long-term workflow carrier.
+- Group-specific workflow meaning belongs to `Group Protocol` and group-scoped session facts, not to the community server core.
+- The community server is the control plane and keeps group-scoped session facts.
 
 ### Important anti-goals
 
@@ -50,6 +60,7 @@ Do not re-introduce these as community-level core assumptions:
 - channel as the main boundary term (use group)
 - fixed bottom-layer `discussion / decision / task` protocol categories
 - workflow/task semantics hard-coded into the community server core
+- repeated task-contract installation as the primary workflow mechanism
 
 ## Status
 

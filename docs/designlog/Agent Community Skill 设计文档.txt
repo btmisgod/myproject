@@ -1,157 +1,168 @@
-﻿Agent Community Skill 设计文档
+Agent Community Skill 设计文档
 
-版本：v0.3
-状态：当前有效设计
-定位：Agent 与 Community 之间的协议适配与本地执行连接层
+版本：v0.6
+状态：目标设计
+定位：Agent 侧 onboarding / update 工具
 
 一、文档目标
 
-本文档用于说明 community-skill 在当前架构中的正确定位、职责边界、已落地能力与当前缺口。
+本文档用于定义 Community Skill 在 Agent Community v2 架构中的正确定位、职责边界与输入输出约束。
+本文档描述的是目标正确设计，不以当前残留实现为准。
 
 二、Skill 的定位
 
-Skill 不是 Runtime，不是 Community Layer，也不是 Group Protocol。
-Skill 的正确定位是：
-
-Agent -> Community 的协议适配层和本地执行连接层。
+Skill 现在只负责 onboarding / update。
 
 它负责：
 
-1. 接入社区
-2. 注册 webhook
-3. 发送标准社区消息
-4. 接收社区 webhook 并交给 agent 本地处理链
-5. 处理消息编码、relations 清洗、协议适配
-6. 维护必要的本地状态文件
+1. 初次接入社区
+2. 安装社区协议到 agent 侧
+3. 建立 agent 与社区 server 的接入方式
+4. 在协议升级时重跑 onboarding
+5. 在不改变社区身份的前提下完成更新
 
-它不负责：
+Skill 不是：
 
-1. 作为最终规则源解释群组制度
-2. 替 Runtime 做最低义务判断
-3. 替 agent 完成最终回复决策
-4. 把自己做成完整任务平台
+1. 群组制度来源
+2. manager 的上位调度器
+3. workflow 推进器
+4. 长期消息热路径里的功能逻辑主位
 
 三、Skill 的核心职责
 
-当前 skill 的核心职责应收口为：
+Skill 只负责以下能力：
 
-1. bootstrap / onboarding
-2. webhook 注册与接收
-3. Message 编码和发送
-4. relations 清洗
-5. Group Protocol / Task Contract / 状态看板相关上下文的本地读取入口
-6. 将 runtime judgment 交给 agent 本地执行链
+1. 协议安装
+2. 接入配置
+3. onboarding 校验
+4. 升级迁移
+5. 接入层说明和本地准备
 
-四、Skill 不应做什么
+四、Skill 不负责什么
 
-Skill 不应：
+Skill 不负责：
 
-1. 继续保留 home_group 的特殊心智
-2. 把收到的群消息按单一默认群做作用域判断
-3. 在 optional 场景下直接替 agent 决定 observe_only
-4. 用 fallback 文本替 agent 生成正式回复并假装这是 agent 决策
+1. 自行重新定义 workflow
+2. 自行解释群组协议中的最终推进规则
+3. 直接替 manager 做切步决定
+4. 直接承担社区消息热路径中的功能性逻辑
+5. 通过 step-specific if 修补测试
 
-五、bootstrap / onboarding
+五、onboarding 的正式内容
 
-Skill 负责 agent 接入社区的初始化流程，包括：
+Skill 在 onboarding 中至少要完成：
 
-1. ensureRegisteredAgent
-2. ensureGroupMembership
-3. ensureAgentWebhook
-4. ensureMessageReceiveRoute
-5. ensureMessageSendCapability
+1. 安装社区协议
+2. 写入社区 server 地址和接入参数
+3. 建立 session / sync 所需基础配置
+4. 校验 agent 身份和接入凭据
+5. 完成版本登记
 
-当前还应满足：
+这一步的目标是：
 
-1. webhook 地址优先使用显式对外地址
-2. 未显式配置时，优先尝试自动发现公网地址
-3. 只发现私网地址时，不应静默当作公网成功路径
-4. 清理本地安装态时，应显式确认是否一起清理环境残留
+1. 让 agent 能成为社区中的长期个体
+2. 让 agent 能通过社区协议和社区 server 通讯
+3. 不要求在每个任务前重新安装一次任务合同
 
-六、webhook 地址策略
+六、update 的正式内容
 
-当前正确策略应为：
+当社区协议版本升级时，Skill 负责：
 
-1. 先使用 COMMUNITY_WEBHOOK_PUBLIC_URL
-2. 其次使用 COMMUNITY_WEBHOOK_PUBLIC_HOST
-3. 其次自动探测公网 IPv4
-4. 若仍无法得到社区服务器可达地址，则显式报错或要求用户介入
-5. 私网地址只应在明确允许时使用
+1. 重跑 onboarding
+2. 更新本地协议版本
+3. 更新接入配置
+4. 保持原有社区身份不变
 
-这条策略的目标不是解决一切网络环境，而是：
+七、与 Runtime 的关系
 
-- 默认别走错路
-- 复杂网络条件由部署者显式处理
+Runtime 负责最轻输入识别。
+Skill 不再负责长期消息热路径里的 workflow 逻辑。
 
-七、消息发送入口
+因此：
 
-Skill 应承担 agent 向社区输出的规范入口。
+1. Runtime 不应依赖 Skill 来决定某个 step 是否推进。
+2. Skill 不应再成为“消息封装 + workflow 纠偏 + manager 修补”的总入口。
+3. Skill 只在 onboarding / update 时与 Runtime 发生配置关系。
 
-当前理想边界是：
+八、与 Community Server 的关系
 
-1. agent 对社区的正式输出应通过 skill 发送
-2. 这样 skill 才能统一执行：
-   - 编码
-   - outbound guard
-   - receipt/debug 追踪
-   - 与 Group Protocol / Task Contract 相关的本地出站规则
+Skill 的作用，是让 agent 正确接入 Community Server。
 
-当前实现缺口：
+它不负责代替 server：
 
-- 社区后端仍允许 agent token 直接 POST /messages
-- 因此 skill 目前还不是唯一出口，只是推荐出口
-- 这件事尚未真正修完
+1. 做统一消息基型校验
+2. 做群会话聚合
+3. 做状态块闸门计算
+4. 做广播投递
 
-八、与 Runtime 的关系
+九、与群组协议的关系
 
-Skill 的正确位置在 Runtime 之后、Community 之前。
+Skill 不负责安装每个群的业务合同。
 
-理想数据流：
+当前正式方向是：
 
-Community Event
--> Runtime Judgment
--> Agent Deliberation
--> Skill Send Path
--> Community API
+1. 社区协议通过 Skill 安装
+2. 群组协议由 server 在群会话中下发或同步
+3. agent 在进入某个 group 时，通过群会话获得本群角色和 workflow 信息
 
-也就是说：
+十、群角色原则
 
-1. Runtime 只给 judgment
-2. agent 自己做最终是否回复、如何回复的判断
-3. Skill 负责把最终动作编码并发到社区
+Skill 必须尊重：
 
-九、当前实现上的关键问题
+1. manager / worker 是群组实例内角色
+2. 不是 agent 的全局固定身份
 
-截至当前阶段，skill 仍存在两个重要缺口：
+因此：
 
-1. Runtime judgment 进入 agent 决策层的链路没有真正做实
-2. agent 输出入口还没有被 skill 垄断
+1. `neko` 不是全局 manager
+2. Skill 不得把群内角色固化成 agent 全局身份
 
-因此，当前文档必须明确：
+十一、广播原则
 
-- Skill 的正确设计目标已经确定
-- 但“真正的 agent 决策层”与“唯一合法出站入口”仍未完全实现
+Skill 不再是系统广播的主要逻辑承载层。
 
-十、状态与清理
+系统广播的正式处理应由：
 
-Skill 当前允许维护一定的本地状态文件，例如：
+1. 社区 server 发出
+2. runtime 识别
+3. agent 本地上下文接收
 
-1. webhook 注册状态
-2. channel / group context 缓存
-3. contract / protocol 本地缓存
-4. outbound receipt / debug 记录
+Skill 只负责让 agent 具备接收这套协议的能力。
 
-卸载或删除 skill 时，不应默认静默删除这些状态。
-正确交互应是：
+十二、当前主线中退出的旧设计
 
-- agent 主动向用户确认是否同时清理环境与残留配置
+以下内容不再属于 Skill 的当前正式主线：
 
-十一、当前有效结论
+1. 把社区消息送入复杂 workflow 逻辑
+2. 把 agent 的最终决定编码成主要热路径工作
+3. 通过 step-specific if 强行推进 workflow
+4. 用 Skill 来弥补 server / 群组协议 / runtime 的边界不清
 
-当前关于 skill 的正确结论是：
+十三、group 口径统一
 
-1. Skill = Protocol Adapter + Local Execution Bridge
-2. Skill 不是最终规则源
-3. Skill 不应继续承载 home_group 特殊语义
-4. Skill 不应替 agent 做 optional -> observe_only 的最终决定
-5. Skill 将来应成为 agent 正式输出到社区的唯一规范入口
+Skill 正式设计统一使用 group 口径。
+
+因此：
+
+1. group_context 是正式口径
+2. channel_context 只作为兼容别名存在
+3. 不再继续扩展新的 channel 语义
+
+十四、当前实现偏差
+
+截至当前阶段，至少还存在以下实现偏差：
+
+1. skill 还残留功能性协作逻辑
+2. 代码中仍残留通过 step-specific if 修补测试的路径
+3. skill 和 runtime / server 的边界尚未完全清理
+
+这些是实现偏差，不改变本文档定义的正确结构。
+
+十五、结论
+
+Skill 的正确定位是：
+
+1. Agent 侧 onboarding / update 工具
+2. 社区协议安装器
+3. 接入配置与升级迁移工具
+4. 不再承担长期 workflow 功能逻辑
