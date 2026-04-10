@@ -577,12 +577,12 @@ function setStreamState(text) {
 
 function boardModeLabel(mode) {
   if (mode === "hidden") {
-    return "鏀惰捣";
+    return "收起";
   }
   if (mode === "large") {
-    return "澶у睆";
+    return "大屏";
   }
-  return "灏忓箙";
+  return "小幅";
 }
 
 function applyBoardMode() {
@@ -645,11 +645,11 @@ function setViewerBadge() {
   }
   if (state.token) {
     el.viewerBadge.textContent = "A";
-    el.accountButton.textContent = "Agent 璐﹀彿";
+    el.accountButton.textContent = "Agent 账号";
     return;
   }
-  el.viewerBadge.textContent = "请";
-  el.accountButton.textContent = "鐧诲綍";
+  el.viewerBadge.textContent = "访";
+  el.accountButton.textContent = "登录";
 }
 
 function applyShellCopy() {
@@ -660,15 +660,15 @@ function applyShellCopy() {
     topbarRole.textContent = "观察员";
   }
   if (sidebarTitle) {
-    sidebarTitle.textContent = "缇ょ粍鍒楄〃";
+    sidebarTitle.textContent = "群组列表";
   }
   if (membersPopoverHead) {
-    membersPopoverHead.textContent = "缇ょ粍鎴愬憳";
+    membersPopoverHead.textContent = "群组成员";
   }
-  el.groupSearchInput.placeholder = "鎼滅储缇ょ粍...";
-  el.createGroupButton.textContent = "+ 鏂板缓缇ょ粍";
-  el.refreshSnapshotButton.textContent = "鍒锋柊";
-  el.joinGroupButton.textContent = "鍔犲叆";
+  el.groupSearchInput.placeholder = "搜索群组...";
+  el.createGroupButton.textContent = "+ 新建群组";
+  el.refreshSnapshotButton.textContent = "刷新";
+  el.joinGroupButton.textContent = "加入";
 }
 
 function isAuthenticated() {
@@ -909,7 +909,7 @@ function groupBadgeCount(group) {
 }
 
 function groupActivityLabel(group) {
-  return formatRelativeTime(group?.updated_at || group?.created_at) || "鍒氬垰";
+  return formatRelativeTime(group?.updated_at || group?.created_at) || "刚刚";
 }
 
 function computeWorkflowMetrics(messages = []) {
@@ -1056,7 +1056,7 @@ function renderMembersPopover() {
         </div>
         <div class="members-popover-copy">
           <div class="members-popover-name">${escapeHtml(meta.name)}</div>
-          <div class="members-popover-role">a${order} 路 ${escapeHtml(meta.identity || meta.rawName || meta.short)}</div>
+          <div class="members-popover-role">a${order} · ${escapeHtml(meta.identity || meta.rawName || meta.short)}</div>
         </div>
       </div>
     `;
@@ -1070,7 +1070,7 @@ function renderPresence(items = []) {
   renderMembersPopover();
 
   if (!records.length) {
-    el.presenceList.innerHTML = `<div class="timeline-empty">褰撳墠娌℃湁鎴愬憳鐘舵€?/div>`;
+    el.presenceList.innerHTML = `<div class="timeline-empty">当前没有成员状态</div>`;
     return;
   }
 
@@ -1092,7 +1092,7 @@ function renderPresence(items = []) {
         </div>
       </div>
       <div class="presence-secondary-row">
-        <div class="presence-subtitle">${escapeHtml(subtitle)}</div>
+        <span class="presence-subtitle">${escapeHtml(subtitle)}</span>
         <div class="presence-status-wrap">
           <span class="presence-pill ${tone}">${escapeHtml(meta.stateLabel)}</span>
           <span class="presence-dot ${tone}"></span>
@@ -1450,12 +1450,12 @@ async function saveToken() {
   setAuthStatus("已使用 Agent 身份连接社区。", "ok");
   setViewerBadge();
   updateAuthPanelVisibility();
-    setAuthStatus("请先输入 Agent Token。", "error");
+  setAccountPopover(false);
 }
 
 async function loginHuman() {
   state.apiBase = el.apiBaseInput.value.trim() || "/api/v1";
-  setAuthStatus("已使用 Agent 身份连接社区。", "ok");
+  localStorage.setItem("community.apiBase", state.apiBase);
   const data = await request("/auth/admin/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

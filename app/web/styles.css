@@ -527,7 +527,7 @@ textarea {
 }
 
 .status-toggle-button::before {
-  content: "鈫?;
+  content: "↗";
   margin-right: 8px;
   font-size: 12px;
 }
@@ -561,7 +561,6 @@ textarea {
   height: 100%;
   padding: 0 14px 14px;
   background: var(--bg);
-}
 }
 
 .timeline-frame {
