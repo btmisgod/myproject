@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import Agent, GroupMembership
 from app.models.group import Group
+from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
 from app.schemas.sync import (
     AgentSessionSyncRequest,
     AgentSessionSyncResponse,
@@ -255,16 +256,67 @@ def _replace_group_metadata(group: Group, metadata: dict[str, Any] | None) -> di
     return replaced
 
 
+def _should_reseed_group_session(
+    session_fact: dict[str, Any],
+    execution_spec: dict[str, Any],
+    *,
+    initial_stage: str,
+) -> bool:
+    if not session_fact:
+        return False
+
+    expected_workflow_id = _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID)
+    expected_execution_spec_id = _text(execution_spec.get("execution_spec_id"))
+    gate_snapshot = _dict(session_fact.get("gate_snapshot"))
+    current_workflow_id = _text(session_fact.get("workflow_id"))
+    snapshot_workflow_id = _text(gate_snapshot.get("workflow_id"))
+    snapshot_execution_spec_id = _text(gate_snapshot.get("execution_spec_id"))
+    current_stage = _text(session_fact.get("current_stage"))
+    snapshot_stage = _text(gate_snapshot.get("current_stage"))
+    stage_order = [stage for stage in _list(execution_spec.get("stage_order")) if _text(stage)]
+    valid_stages = {initial_stage, *stage_order}
+    valid_stages.discard("")
+
+    if current_workflow_id and current_workflow_id != expected_workflow_id:
+        return True
+    if snapshot_workflow_id and snapshot_workflow_id != expected_workflow_id:
+        return True
+    if expected_execution_spec_id and snapshot_execution_spec_id and snapshot_execution_spec_id != expected_execution_spec_id:
+        return True
+    if current_stage and valid_stages and current_stage not in valid_stages:
+        return True
+    if snapshot_stage and valid_stages and snapshot_stage not in valid_stages:
+        return True
+    return False
+
+
 def ensure_group_session_fact(group: Group) -> dict[str, Any]:
     metadata = _replace_group_metadata(
         group,
         ensure_group_protocol_metadata(group.metadata_json, group_name=group.name, group_slug=group.slug),
     )
+    group_protocol = _dict(_dict(metadata.get(COMMUNITY_PROTOCOLS_KEY)).get("channel"))
+    group_session_seed = _dict(group_protocol.get("group_session_seed"))
+    seed_gate_snapshot = deepcopy(_dict(group_session_seed.get("gate_snapshot")))
+    seed_state_json = deepcopy(_dict(group_session_seed.get("state_json")))
     community = _dict(metadata.get(COMMUNITY_V2_KEY))
-    session_fact = _dict(community.get("group_session"))
+    stored_session_fact = _dict(community.get("group_session"))
     group_context = _dict(community.get("group_context"))
     execution_spec = group_execution_spec(group)
     initial_stage = _text(execution_spec.get("initial_stage"), DEFAULT_STAGE)
+    reseed_session = _should_reseed_group_session(stored_session_fact, execution_spec, initial_stage=initial_stage)
+    session_fact = (
+        {
+            "group_session_id": _text(stored_session_fact.get("group_session_id"), str(group.id)),
+            "workflow_id": _text(group_session_seed.get("workflow_id"), _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID)),
+            "current_mode": _text(group_session_seed.get("current_mode"), DEFAULT_MODE),
+            "current_stage": _text(group_session_seed.get("current_stage"), initial_stage),
+            "gate_snapshot": seed_gate_snapshot,
+            "state_json": seed_state_json,
+        }
+        if reseed_session
+        else stored_session_fact
+    )
 
     if not group_context:
         group_context = _group_context_seed(group)
@@ -274,18 +326,24 @@ def ensure_group_session_fact(group: Group) -> dict[str, Any]:
         PROTOCOL_VERSION,
     )
     group_context_version = _text(community.get("group_context_version"), _version_token("group-context", group.id))
-    group_session_version = _text(session_fact.get("group_session_version"), _version_token("group-session", group.id))
+    group_session_version = _text(
+        session_fact.get("group_session_version"),
+        _version_token("group-session-reset" if reseed_session else "group-session", group.id),
+    )
     session_fact = {
         "group_id": str(group.id),
         "group_session_id": _text(session_fact.get("group_session_id"), str(group.id)),
         "group_session_version": group_session_version,
         "protocol_version": protocol_version,
-        "workflow_id": _text(session_fact.get("workflow_id"), _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID)),
-        "current_mode": _text(session_fact.get("current_mode"), DEFAULT_MODE),
-        "current_stage": _text(session_fact.get("current_stage"), initial_stage),
+        "workflow_id": _text(
+            session_fact.get("workflow_id"),
+            _text(group_session_seed.get("workflow_id"), _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID)),
+        ),
+        "current_mode": _text(session_fact.get("current_mode"), _text(group_session_seed.get("current_mode"), DEFAULT_MODE)),
+        "current_stage": _text(session_fact.get("current_stage"), _text(group_session_seed.get("current_stage"), initial_stage)),
         "group_context_version": group_context_version,
-        "gate_snapshot": _dict(session_fact.get("gate_snapshot")),
-        "state_json": _dict(session_fact.get("state_json")),
+        "gate_snapshot": _dict(session_fact.get("gate_snapshot")) or deepcopy(seed_gate_snapshot),
+        "state_json": _dict(session_fact.get("state_json")) or deepcopy(seed_state_json),
     }
     session_fact["gate_snapshot"].setdefault("step0.ready", True)
     if session_fact["current_stage"] == "step0" and initial_stage:

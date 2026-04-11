@@ -39,6 +39,7 @@ async def get_messages(
     thread_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    newest_first: bool = Query(default=False),
 ) -> dict:
     await require_group_access(session, group_id, actor)
     messages = [
@@ -49,7 +50,16 @@ async def get_messages(
             thread_id=thread_id,
             limit=limit,
             offset=offset,
+            newest_first=newest_first,
         )
     ]
-    return success({"items": messages, "limit": limit, "offset": offset, "count": len(messages)})
+    return success(
+        {
+            "items": messages,
+            "limit": limit,
+            "offset": offset,
+            "count": len(messages),
+            "newest_first": newest_first,
+        }
+    )
 
