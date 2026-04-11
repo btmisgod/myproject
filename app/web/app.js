@@ -741,25 +741,12 @@ async function request(path, options = {}) {
   return data.data;
 }
 
-async function loadAllGroupMessages(groupId) {
-  const limit = 200;
-  let offset = 0;
-  const all = [];
-
-  while (true) {
-    const data = await request(`/messages?group_id=${encodeURIComponent(groupId)}&limit=${limit}&offset=${offset}`, { method: "GET" });
-    const items = Array.isArray(data?.items) ? data.items : [];
-    all.push(...items);
-    if (items.length < limit) {
-      break;
-    }
-    offset += limit;
-    if (offset > 5000) {
-      break;
-    }
-  }
-
-  return all;
+async function loadRecentGroupMessages(groupId, limit = 200) {
+  const data = await request(
+    `/messages?group_id=${encodeURIComponent(groupId)}&limit=${limit}&offset=0&newest_first=true`,
+    { method: "GET" },
+  );
+  return Array.isArray(data?.items) ? data.items : [];
 }
 
 function getAgentMeta(agentId) {
@@ -1024,7 +1011,7 @@ function renderGroups() {
               ${badgeCount !== "" ? `<span class="group-item-badge">${escapeHtml(String(badgeCount))}</span>` : ""}
             </div>
             <div class="group-item-meta-row">
-              <span class="group-item-meta-chip">${escapeHtml(String(group.member_count ?? group.members_count ?? 0))} 浜?/span>
+              <span class="group-item-meta-chip">${escapeHtml(String(group.member_count ?? group.members_count ?? 0))} 人</span>
               <span class="group-item-meta-chip">${escapeHtml(groupActivityLabel(group))}</span>
             </div>
             <div class="group-item-slug">${escapeHtml(group.slug || group.group_type || "community_protocol")}</div>
@@ -1106,6 +1093,9 @@ function renderPresence(items = []) {
 
 function renderTasks(messages = []) {
   const metrics = computeWorkflowMetrics(messages);
+  const recentMessages = messages
+    .slice()
+    .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0));
   el.taskCount.textContent = String(metrics.total);
   el.workflowPendingCount.textContent = String(metrics.pending);
   el.workflowActiveCount.textContent = String(metrics.active);
@@ -1114,8 +1104,8 @@ function renderTasks(messages = []) {
   el.timelineHint.textContent = state.activeGroup ? "社区协作流" : "等待选择群组";
 
   el.taskList.innerHTML = metrics.total
-    ? messages.slice(0, 3).map((message) => `<div class="task-card">${escapeHtml(messageText(message) || messageHeadline(message))}</div>`).join("")
-    : `<div class="task-card">鏆傛棤鍗忎綔椤?/div>`;
+    ? recentMessages.slice(0, 3).map((message) => `<div class="task-card">${escapeHtml(messageText(message) || messageHeadline(message))}</div>`).join("")
+    : `<div class="task-card">暂无协作项</div>`;
 }
 
 function renderMessages(items = []) {
@@ -1355,7 +1345,7 @@ async function loadGroups() {
 
 async function loadSnapshot(groupId) {
   const snapshot = await request(`/projection/groups/${groupId}/snapshot`, { method: "GET" });
-  const allMessages = await loadAllGroupMessages(groupId);
+  const allMessages = await loadRecentGroupMessages(groupId);
   state.snapshot = snapshot;
   state.groupMessages = allMessages;
 
@@ -1733,10 +1723,6 @@ if (state.authMode === "human" && state.humanAccessToken) {
 } else if (state.token) {
   saveToken().catch((error) => setAuthStatus(error.message, "error"));
 }
-
-
-
-
 
 
 
