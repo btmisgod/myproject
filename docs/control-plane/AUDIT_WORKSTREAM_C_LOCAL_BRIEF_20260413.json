@@ -1,0 +1,239 @@
+{
+  "brief_version": "1.0",
+  "generated_at": "2026-04-13",
+  "language": "zh-CN",
+  "task": {
+    "source_json": "https://raw.githubusercontent.com/btmisgod/Logs/main/community-agents/audit-20260413/20260413-audit-workstream-c-live-surface-v1.json",
+    "workstream": "C",
+    "status": "blocked_by_remote_deployment",
+    "summary": "本地属于我负责范围内的 C 工作流修补、脚本校正和本地验证已完成；最终 fresh-install + live canonical effect 验收仍被远端未部署状态阻塞。"
+  },
+  "authority_rules_followed": {
+    "read_remote_context_first": true,
+    "stayed_within_workstream_c": true,
+    "did_not_treat_openclaw_for_community_as_primary_authority": true,
+    "fresh_install_rule": "要求使用 fresh upstream OpenClaw + fresh GitHub community-skill",
+    "canonical_effect_rule": "不把 HTTP 200/202 当完成，必须检查消息是否真正出现在社区历史中"
+  },
+  "my_scope": {
+    "repos_modified_by_me": [
+      {
+        "repo": "community-skill",
+        "purpose": [
+          "修正 unix_socket 场景下的 webhook 注册逻辑",
+          "把 send 成功判定从“HTTP 成功”改成“社区侧真实落消息”",
+          "让 connect 流程先持久化 token/group/webhook 状态，再做 session sync",
+          "补充 C 范围回归测试",
+          "修正 Linux shell 脚本换行和关键默认值"
+        ],
+        "files": [
+          "E:\\ocdex\\agents community\\community-skill\\community-bootstrap.env",
+          "E:\\ocdex\\agents community\\community-skill\\.gitattributes",
+          "E:\\ocdex\\agents community\\community-skill\\scripts\\community_integration.mjs",
+          "E:\\ocdex\\agents community\\community-skill\\scripts\\community-agent-cli.mjs",
+          "E:\\ocdex\\agents community\\community-skill\\scripts\\ensure-community-agent-onboarding.sh",
+          "E:\\ocdex\\agents community\\community-skill\\tests\\community-skill-outbound-v2.test.mjs"
+        ]
+      },
+      {
+        "repo": "openclaw-for-community",
+        "purpose": [
+          "把模板默认值从 localhost/host.docker.internal 改成可用于真实审计的配置",
+          "让 bootstrap 从 GitHub fresh clone community-skill，而不是拷模板内 skill",
+          "把服务端验证脚本从“看 202”改成“看 canonical effect”",
+          "补充 webhook 真注册检查",
+          "修正 Linux shell 脚本换行"
+        ],
+        "files": [
+          "E:\\ocdex\\agents community\\openclaw-for-community\\community-bootstrap.env",
+          "E:\\ocdex\\agents community\\openclaw-for-community\\.gitattributes",
+          "E:\\ocdex\\agents community\\openclaw-for-community\\scripts\\bootstrap-community-agent-template.sh",
+          "E:\\ocdex\\agents community\\openclaw-for-community\\scripts\\server-verify-agent-onboarding.sh",
+          "E:\\ocdex\\agents community\\openclaw-for-community\\docs\\server-verification.md"
+        ]
+      }
+    ],
+    "repos_audited_but_not_modified_by_me": [
+      {
+        "repo": "myproject",
+        "note": "本地已存在 session sync 相关未提交实现；我没有改这些文件，只做了代码检查和测试验证。",
+        "audited_files": [
+          "E:\\ocdex\\agents community\\myproject\\app\\api\\v1\\endpoints\\agents.py",
+          "E:\\ocdex\\agents community\\myproject\\app\\schemas\\sessions.py",
+          "E:\\ocdex\\agents community\\myproject\\app\\services\\session_sync.py",
+          "E:\\ocdex\\agents community\\myproject\\app\\models\\session.py",
+          "E:\\ocdex\\agents community\\myproject\\tests\\test_session_sync_contract.py"
+        ]
+      }
+    ]
+  },
+  "problems_found": [
+    {
+      "id": "C-LIVE-001",
+      "area": "live surface",
+      "finding": "live 社区服务缺少 POST /api/v1/agents/me/session/sync",
+      "evidence": [
+        "2026-04-13 直接读取 live openapi，未发现该路径",
+        "2026-04-13 对 live 服务创建临时 agent 后调用该接口，返回 404",
+        "2026-04-13 WSL fresh-install 验证日志第一条关键错误也是 Request failed for /agents/me/session/sync: 404"
+      ],
+      "impact": "fresh install 无法完成真实 onboarding"
+    },
+    {
+      "id": "C-FRESH-002",
+      "area": "fresh-install surface",
+      "finding": "community-skill 之前会在 unix_socket 模式跳过 webhook 注册",
+      "impact": "即使本地 socket/ingress 都在，社区服务也收不到真实回调入口"
+    },
+    {
+      "id": "C-FRESH-003",
+      "area": "canonical effect",
+      "finding": "community-agent-cli 和 server verify 之前把 HTTP 200/202 误当成成功",
+      "impact": "会把未真正落库、未真正广播的消息误判为通过"
+    },
+    {
+      "id": "C-TEMPLATE-004",
+      "area": "template leakage",
+      "finding": "bootstrap 模板之前直接复制模板内 skill，等于把 openclaw-for-community 误当主权威",
+      "impact": "违背远端上下文要求，fresh install 结果不可信"
+    },
+    {
+      "id": "C-TEMPLATE-005",
+      "area": "bad defaults",
+      "finding": "模板默认值之前使用 localhost 和 host.docker.internal",
+      "impact": "新装时很容易生成根本不能被社区访问的 webhook 地址"
+    },
+    {
+      "id": "C-RUNTIME-006",
+      "area": "restart stability",
+      "finding": "connect 流程之前在 session sync 前不先落盘 token/group/webhook 状态",
+      "impact": "第一次因 live 404 失败后，systemd 重启会反复重复注册并撞上 agent name already exists"
+    },
+    {
+      "id": "C-LINUX-007",
+      "area": "script executability",
+      "finding": "关键 .sh/.env 在 Windows 检出后变成 CRLF，Linux bash 会直接报语法错",
+      "impact": "fresh-install 验证脚本本身就可能无法执行"
+    }
+  ],
+  "repairs_done": [
+    {
+      "id": "FIX-CS-001",
+      "repo": "community-skill",
+      "result": "已修",
+      "details": "buildWebhookUrl 不再把 loopback 地址当公网地址；unix_socket 模式下只要有有效公共地址就会注册 agent webhook。"
+    },
+    {
+      "id": "FIX-CS-002",
+      "repo": "community-skill",
+      "result": "已修",
+      "details": "新增 listCommunityMessages 和 verifyCanonicalMessageVisible；send 成功必须看到消息真实出现在社区消息历史中。"
+    },
+    {
+      "id": "FIX-CS-003",
+      "repo": "community-skill",
+      "result": "已修",
+      "details": "connectToCommunity 现在会在 ensureAgent、ensureGroup、ensureAgentWebhook 后立刻保存状态，避免 session sync 失败后重复注册。"
+    },
+    {
+      "id": "FIX-CS-004",
+      "repo": "community-skill",
+      "result": "已修",
+      "details": "onboarding shell 脚本增加 wait_for_agent_webhook，要求社区侧 webhook 订阅真实存在。"
+    },
+    {
+      "id": "FIX-OCF-001",
+      "repo": "openclaw-for-community",
+      "result": "已修",
+      "details": "bootstrap-community-agent-template.sh 改为 fresh clone GitHub community-skill，模板仓不再是 skill 权威来源。"
+    },
+    {
+      "id": "FIX-OCF-002",
+      "repo": "openclaw-for-community",
+      "result": "已修",
+      "details": "模板默认 community-bootstrap.env 改成 live 社区地址，并去掉 host.docker.internal 这类假公网默认值。"
+    },
+    {
+      "id": "FIX-OCF-003",
+      "repo": "openclaw-for-community",
+      "result": "已修",
+      "details": "server-verify-agent-onboarding.sh 改成同时验证 state、webhook、canonical message materialization。"
+    },
+    {
+      "id": "FIX-OCF-004",
+      "repo": "openclaw-for-community",
+      "result": "已修",
+      "details": "server-verification.md 文档已同步更新，PASS 标准不再把 202 当终点。"
+    },
+    {
+      "id": "FIX-LF-001",
+      "repo": "community-skill + openclaw-for-community",
+      "result": "已修",
+      "details": "为关键 .sh/.env 增加 .gitattributes 的 LF 约束，避免 Linux 脚本被 CRLF 破坏。"
+    }
+  ],
+  "validation_work": [
+    {
+      "name": "community-skill node tests",
+      "date": "2026-04-13",
+      "result": "pass",
+      "details": "node --test tests/community-runtime-message-protocol-v2.test.mjs tests/community-skill-outbound-v2.test.mjs -> 14/14 passed"
+    },
+    {
+      "name": "myproject session sync contract",
+      "date": "2026-04-13",
+      "result": "pass",
+      "details": "pytest -q tests/test_session_sync_contract.py -> 2/2 passed"
+    },
+    {
+      "name": "bash syntax check",
+      "date": "2026-04-13",
+      "result": "pass",
+      "details": "关键脚本 bash -n 通过，包括 bootstrap-community-agent-template.sh、server-verify-agent-onboarding.sh、ensure-community-agent-onboarding.sh"
+    },
+    {
+      "name": "WSL fresh-install live validation",
+      "date": "2026-04-13",
+      "result": "fail",
+      "details": "openclaw-for-community/scripts/server-verify-agent-onboarding.sh 在 Linux/WSL 真跑时失败；根因先是 live /agents/me/session/sync 返回 404，之后 systemd 重启又因 agent name already exists 持续失败"
+    }
+  ],
+  "environment_actions_taken": [
+    {
+      "date": "2026-04-13",
+      "action": "在 WSL 安装 Node 24",
+      "purpose": "为了执行 Linux/systemd/Node 验证脚本"
+    },
+    {
+      "date": "2026-04-13",
+      "action": "在 WSL 安装 python3.12-venv",
+      "purpose": "为了跑 myproject 的本地 pytest 验证"
+    },
+    {
+      "date": "2026-04-13",
+      "action": "创建并清理审计用临时 systemd 单元、测试目录、WSL 验证环境临时目录",
+      "purpose": "只保留工作结果，不保留半成品运行现场"
+    }
+  ],
+  "real_blockers": [
+    {
+      "id": "BLOCKER-1",
+      "type": "remote deployment",
+      "detail": "live 社区服务 43.130.233.109:8000 仍未部署 /api/v1/agents/me/session/sync，因此 fresh-install 无法通过真实 onboarding。",
+      "owner": "remote myproject deployment"
+    },
+    {
+      "id": "BLOCKER-2",
+      "type": "fresh GitHub validation boundary",
+      "detail": "用户要求 final 验收必须使用 fresh GitHub community-skill；当前我本地已修，但远端 GitHub fresh skill 若尚未更新，这条验收线仍无法通过。",
+      "owner": "remote GitHub update/publish"
+    }
+  ],
+  "recommended_next_actions": [
+    "把 myproject 的 session sync 实现部署到 live 社区服务。",
+    "把 community-skill 和 openclaw-for-community 的本地修补推到对应 GitHub 仓库。",
+    "部署后重新执行 fresh upstream OpenClaw + fresh GitHub community-skill 的 Linux/systemd 验证。",
+    "重新检查 canonical effect：要求 send 路由返回后，社区消息历史中能查到同一条消息。"
+  ],
+  "ownership_note": "本简报只把我本轮实际负责的本地改动和执行过的验证写进去；myproject 里已有的未提交实现被明确标为“审计但未由我修改”。"
+}

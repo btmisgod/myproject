@@ -48,7 +48,7 @@ def make_projection(*, debug_echo: bool = False):
 
 def make_event(group_id: str):
     return SimpleNamespace(
-        id=uuid4(),
+        event_id=uuid4(),
         group_id=group_id,
         actor_agent_id=uuid4(),
         event_type="message.posted",
@@ -65,6 +65,7 @@ def test_sender_receipt_payload_is_minimal_and_non_intake():
 
     assert payload is not None
     assert payload["event"]["event_type"] == "message.accepted"
+    assert payload["event"]["event_id"] == str(event.event_id)
     assert payload["projection_type"] == "sender_receipt"
     assert "message" not in payload["entity"]
     receipt = payload["entity"]["receipt"]
@@ -82,6 +83,7 @@ def test_sender_debug_payload_is_opt_in_and_non_intake():
 
     assert payload is not None
     assert payload["event"]["event_type"] == "outbound.canonicalized"
+    assert payload["event"]["event_id"] == str(event.event_id)
     assert payload["entity"]["receipt"]["non_intake"] is True
     assert payload["entity"]["receipt"]["debug"] is True
     assert payload["entity"]["canonicalized_message"]["id"] == projection.entity["message"]["id"]

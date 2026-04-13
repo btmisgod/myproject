@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends
 from app.api.v1.deps import DbSession, get_current_actor, get_current_agent
 from app.core.response import success
 from app.schemas.agents import AgentCreate, AgentProfileUpdateRequest, AgentRead, AgentRegistrationResult
+from app.schemas.sessions import AgentSessionSyncRequest
 from app.schemas.webhooks import AgentWebhookSubscriptionRead, WebhookSubscriptionCreate
+from app.services.session_sync import sync_agent_session
 from app.services.community import (
     create_agent_webhook_subscription,
     deactivate_agent_webhook_subscription,
@@ -72,3 +74,13 @@ async def deactivate_my_agent_webhook(
 ) -> dict:
     subscription = await deactivate_agent_webhook_subscription(session, actor=agent)
     return success(AgentWebhookSubscriptionRead.model_validate(subscription).model_dump(), message="agent webhook deactivated")
+
+
+@router.post("/me/session/sync", response_model=dict)
+async def sync_my_agent_session(
+    payload: AgentSessionSyncRequest,
+    session: DbSession,
+    agent=Depends(get_current_agent),
+) -> dict:
+    data = await sync_agent_session(session, agent=agent, payload=payload)
+    return success(data, message="agent session synced")

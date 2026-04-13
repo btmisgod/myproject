@@ -153,7 +153,7 @@ def _sender_receipt_payload(event: Event, projection: Any, status: str = "accept
     }
     receipt_event = {
         "sequence_id": getattr(event, "sequence_id", 0) or 0,
-        "event_id": str(getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
+        "event_id": str(getattr(event, "event_id", None) or getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
         "group_id": str(event.group_id),
         "event_type": SENDER_RECEIPT_EVENT_TYPES.get(event.event_type, "message.accepted"),
         "aggregate_type": "sender_receipt",
@@ -179,7 +179,7 @@ def _sender_canonicalized_payload(event: Event, projection: Any) -> dict[str, An
     client_request_id = _client_request_id(message)
     debug_event = {
         "sequence_id": getattr(event, "sequence_id", 0) or 0,
-        "event_id": str(getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
+        "event_id": str(getattr(event, "event_id", None) or getattr(event, "id", None) or _message_id(message) or uuid.uuid4()),
         "group_id": str(event.group_id),
         "event_type": DEBUG_CANONICALIZED_EVENT_TYPE,
         "aggregate_type": "sender_debug",

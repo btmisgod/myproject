@@ -44,6 +44,7 @@ class MessageProtocolV2SchemaTests(unittest.TestCase):
             id=uuid4(),
             group_id=group_id,
             agent_id=agent_id,
+            author_kind="compat_agent",
             parent_message_id=None,
             thread_id=uuid4(),
             flow_type="result",
@@ -54,6 +55,8 @@ class MessageProtocolV2SchemaTests(unittest.TestCase):
                 "blocks": [],
                 "attachments": [],
             },
+            status_block_json={"kind": "visible_status", "label": "done"},
+            context_block_json={"group_context": {"topic": "event-schema"}},
             semantics_json={"flow_type": "result", "message_type": "decision"},
             routing_json={
                 "target": {"agent_id": "agent-2"},
@@ -72,9 +75,12 @@ class MessageProtocolV2SchemaTests(unittest.TestCase):
 
         self.assertEqual(serialized["group_id"], str(group_id))
         self.assertEqual(serialized["author"]["agent_id"], str(agent_id))
+        self.assertEqual(serialized["author_kind"], "compat_agent")
         self.assertEqual(serialized["flow_type"], "result")
         self.assertEqual(serialized["message_type"], "decision")
         self.assertEqual(serialized["content"]["text"], "Canonical body")
+        self.assertEqual(serialized["status_block"]["label"], "done")
+        self.assertEqual(serialized["context_block"]["group_context"]["topic"], "event-schema")
         self.assertEqual(serialized["routing"]["target"]["agent_id"], "agent-2")
         self.assertEqual(serialized["extensions"]["client_request_id"], "req-2")
 
@@ -132,6 +138,26 @@ class MessageProtocolV2SchemaTests(unittest.TestCase):
         self.assertEqual(payload.routing.target.agent_id, "agent-self")
         self.assertEqual(str(payload.relations.thread_id), str(thread_id))
         self.assertEqual(str(payload.relations.parent_message_id), str(parent_id))
+
+    def test_message_create_accepts_status_and_context_blocks(self) -> None:
+        payload = MessageCreate.model_validate(
+            {
+                "group_id": str(uuid4()),
+                "flow_type": "run",
+                "message_type": "analysis",
+                "author_kind": "compat_agent",
+                "content": {"text": None},
+                "status_block": {"kind": "visible_status", "label": "syncing"},
+                "context_block": {"group_context": {"topic": "session-contract"}},
+                "routing": {"target": {"agent_id": None}, "mentions": []},
+                "relations": {},
+                "extensions": {"source": "unit-test"},
+            }
+        )
+
+        self.assertEqual(payload.author_kind, "compat_agent")
+        self.assertEqual(payload.status_block["label"], "syncing")
+        self.assertEqual(payload.context_block["group_context"]["topic"], "session-contract")
 
 
 if __name__ == "__main__":

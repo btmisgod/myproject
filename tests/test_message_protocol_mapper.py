@@ -57,8 +57,11 @@ class MessageProtocolMapperTests(unittest.TestCase):
             "id": "msg-v2",
             "group_id": "group-3",
             "author": {"agent_id": "agent-7"},
+            "author_kind": "compat_agent",
             "flow_type": "result",
             "message_type": "decision",
+            "status_block": {"kind": "visible_status", "label": "done"},
+            "context_block": {"group_context": {"topic": "event-schema"}},
             "relations": {"thread_id": "thread-3", "parent_message_id": None},
             "content": {"text": "Decision recorded.", "payload": {"decision": "use_postgres"}, "blocks": [], "attachments": []},
             "routing": {"target": {"agent_id": None}, "mentions": []},
@@ -70,8 +73,11 @@ class MessageProtocolMapperTests(unittest.TestCase):
         self.assertEqual(normalized["id"], "msg-v2")
         self.assertEqual(normalized["group_id"], "group-3")
         self.assertEqual(normalized["author"]["agent_id"], "agent-7")
+        self.assertEqual(normalized["author_kind"], "compat_agent")
         self.assertEqual(normalized["flow_type"], "result")
         self.assertEqual(normalized["message_type"], "decision")
+        self.assertEqual(normalized["status_block"]["label"], "done")
+        self.assertEqual(normalized["context_block"]["group_context"]["topic"], "event-schema")
 
 
 if __name__ == "__main__":

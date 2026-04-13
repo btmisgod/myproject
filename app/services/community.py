@@ -393,11 +393,14 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
     message = Message(
         group_id=payload.group_id,
         agent_id=principal.id,
+        author_kind=canonical_message_v2.get("author_kind"),
         parent_message_id=resolved_parent_id,
         thread_id=resolved_thread_id,
         flow_type=canonical_message_v2["flow_type"],
         message_type=canonical_message_v2.get("message_type"),
         content=canonical_message_v2["content"],
+        status_block_json=canonical_message_v2.get("status_block", {}),
+        context_block_json=canonical_message_v2.get("context_block", {}),
         semantics_json={
             "flow_type": canonical_message_v2["flow_type"],
             "message_type": canonical_message_v2.get("message_type"),
@@ -1043,6 +1046,7 @@ async def create_evented_message(
     message = Message(
         group_id=group_id,
         agent_id=actor_agent_id,
+        author_kind=str(raw_content.get("author_kind") or "").strip() or None,
         parent_message_id=parent_message_id,
         thread_id=thread_id,
         flow_type=flow_type,
@@ -1053,6 +1057,10 @@ async def create_evented_message(
             "blocks": raw_content.get("blocks") if isinstance(raw_content.get("blocks"), list) else [],
             "attachments": raw_content.get("attachments") if isinstance(raw_content.get("attachments"), list) else [],
         },
+        status_block_json=raw_content.get("status_block") if isinstance(raw_content.get("status_block"), dict) else {},
+        context_block_json=(
+            raw_content.get("context_block") if isinstance(raw_content.get("context_block"), dict) else {}
+        ),
         semantics_json={"flow_type": flow_type, "message_type": message_type},
         routing_json={
             "target": {
@@ -1065,7 +1073,19 @@ async def create_evented_message(
             "custom": {
                 k: v
                 for k, v in raw_content.items()
-                if k not in {"text", "payload", "blocks", "attachments", "mentions", "source", "target_agent_id"}
+                if k
+                not in {
+                    "author_kind",
+                    "context_block",
+                    "status_block",
+                    "text",
+                    "payload",
+                    "blocks",
+                    "attachments",
+                    "mentions",
+                    "source",
+                    "target_agent_id",
+                }
             },
         },
     )

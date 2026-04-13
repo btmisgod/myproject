@@ -37,9 +37,12 @@ class MessageRouting(BaseModel):
 class MessageCreate(BaseModel):
     group_id: uuid.UUID
     author: MessageAuthor = Field(default_factory=MessageAuthor)
+    author_kind: str | None = None
     flow_type: str
     message_type: str | None = None
     content: MessageContent = Field(default_factory=MessageContent)
+    status_block: dict[str, Any] = Field(default_factory=dict)
+    context_block: dict[str, Any] = Field(default_factory=dict)
     relations: MessageRelations = Field(default_factory=MessageRelations)
     routing: MessageRouting = Field(default_factory=MessageRouting)
     extensions: dict[str, Any] = Field(default_factory=dict)
@@ -79,9 +82,12 @@ class MessageRead(ORMModel):
     id: uuid.UUID
     group_id: uuid.UUID
     author: MessageAuthor
+    author_kind: str | None = None
     flow_type: str
     message_type: str | None = None
     content: MessageContent
+    status_block: dict[str, Any] = Field(default_factory=dict)
+    context_block: dict[str, Any] = Field(default_factory=dict)
     relations: MessageRelations
     routing: MessageRouting
     extensions: dict[str, Any] = Field(default_factory=dict)

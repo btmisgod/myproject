@@ -1,0 +1,165 @@
+{
+  "task_id": "20260413-audit-workstream-a-server-and-data-v1",
+  "report_type": "local_change_brief",
+  "generated_on": "2026-04-13",
+  "workspace": "E:\\ocdex\\agents community\\myproject",
+  "scope": {
+    "workstream": "A",
+    "included": [
+      "community server",
+      "onboarding/session contract",
+      "message/event/session/group-session data contracts",
+      "server-side field consumption",
+      "server-side legacy residue cleanup"
+    ],
+    "excluded": [
+      "group bootstrap feature implementation",
+      "new workflow feature development",
+      "frontend redesign",
+      "template-repo-first fixes"
+    ]
+  },
+  "hard_rules_followed": [
+    "did_not_implement_group_bootstrap",
+    "did_not_delete_duplicated_author_kind",
+    "audited_before_repair",
+    "did_not_use_template_repo_as_main_authority"
+  ],
+  "status": "completed_with_environment_validation_blocker",
+  "summary": {
+    "core_result": [
+      "补上了服务端缺失的 /api/v1/agents/me/session/sync 合同。",
+      "新增 AgentSession 和 GroupSession 两个服务端正式对象，承接 skill 的 session 同步输入输出。",
+      "把 author_kind、status_block、context_block 接进服务端 schema、存储、序列化和出站映射，避免 skill 发出的结构化消息被静默丢失。",
+      "修正 sender receipt/debug 事件错误读取 event.id 的残留，改为优先读取正式字段 event_id。",
+      "补了一层旧库启动兼容逻辑，自动为 messages 表补 author_kind、status_block_json、context_block_json 三个列。"
+    ],
+    "compatibility_position": {
+      "author_kind": "保留为兼容残留字段，不作为当前核心语义驱动字段，不删除。",
+      "status_block": "视为正式顶层消息字段，服务端必须接收、存储、回传。",
+      "context_block": "视为正式顶层消息字段，服务端必须接收、存储、回传。"
+    }
+  },
+  "problems_found": [
+    {
+      "id": "A-01",
+      "title": "服务端缺失 session/sync 正式接入合同",
+      "symptom": "community-skill 在调用 /agents/me/session/sync，但 myproject 原本没有这条接口，也没有 AgentSession/GroupSession 对象。",
+      "root_cause": "skill 侧接入协议已经升级到 session 同步层，server 侧仍停留在旧接入层。",
+      "repair": [
+        "新增 AgentSession 模型",
+        "新增 GroupSession 模型",
+        "新增 AgentSessionSyncRequest/Response schema",
+        "新增 sync_agent_session 服务",
+        "新增 POST /api/v1/agents/me/session/sync 路由"
+      ]
+    },
+    {
+      "id": "A-02",
+      "title": "消息结构化字段被服务端静默丢失",
+      "symptom": "skill 发送的 author_kind、status_block、context_block 无法完整落到服务端。",
+      "root_cause": "消息 schema、ORM、mapper、入库链路、出站链路没有同步升级。",
+      "repair": [
+        "Message 模型新增 author_kind、status_block_json、context_block_json",
+        "MessageCreate/MessageRead 新增对应字段",
+        "message_protocol_mapper 支持规范化、序列化、兼容 legacy 输入",
+        "community.py 在 post_message/create_evented_message 中完成入库承接",
+        "delivery_adapter 保证出站消息仍能带回这些字段"
+      ]
+    },
+    {
+      "id": "A-03",
+      "title": "sender receipt/debug 事件读取错误的事件主键字段",
+      "symptom": "sender receipt/debug 的 event_id 可能错误回退到 message id 或随机值。",
+      "root_cause": "旧残留代码读取 event.id，但正式 Event 模型字段是 event_id。",
+      "repair": [
+        "event_bus 中改为优先读取 event.event_id，再兼容 event.id"
+      ]
+    },
+    {
+      "id": "A-04",
+      "title": "旧库不会自动长出新消息列",
+      "symptom": "代码改完后，已有 messages 表仍可能继续丢字段。",
+      "root_cause": "项目启动只做 create_all，不做已有表列补齐。",
+      "repair": [
+        "bootstrap_database 新增 messages 表列补齐逻辑"
+      ]
+    }
+  ],
+  "files_changed": [
+    "app/api/v1/endpoints/agents.py",
+    "app/db/bootstrap.py",
+    "app/models/__init__.py",
+    "app/models/message.py",
+    "app/models/session.py",
+    "app/schemas/messages.py",
+    "app/schemas/sessions.py",
+    "app/services/community.py",
+    "app/services/delivery_adapter.py",
+    "app/services/event_bus.py",
+    "app/services/message_protocol_mapper.py",
+    "app/services/session_sync.py",
+    "docs/AGENT_COMM_PROTOCOL.md",
+    "tests/test_message_protocol_mapper.py",
+    "tests/test_message_protocol_v2_schema.py",
+    "tests/test_sender_receipt_events.py",
+    "tests/test_session_sync_contract.py"
+  ],
+  "validation": {
+    "code_grounded_checks": [
+      "session/sync 路由、schema、服务已连通到正式代码路径。",
+      "消息结构化字段已覆盖 schema -> mapper -> ORM -> serializer -> 出站映射。",
+      "协议说明文件已补充 session/sync 和消息顶层字段定义。",
+      "新增或更新了与 mapper、schema、sender receipt、session snapshot 相关的测试文件。"
+    ],
+    "tool_checks_run": [
+      {
+        "tool": "cmd /c npx pyright",
+        "result": "ran_with_dependency_noise",
+        "note": "主要报缺少 fastapi/sqlalchemy/pydantic/pytest 等 Python 依赖，不构成这次改动的直接语法错误证据。"
+      }
+    ],
+    "not_run": [
+      {
+        "tool": "python py_compile",
+        "reason": "当前机器没有可执行的真实 Python 解释器，python/python3 都是 Windows 商店占位符。"
+      },
+      {
+        "tool": "pytest",
+        "reason": "当前机器没有 Python 运行环境和 pytest。"
+      },
+      {
+        "tool": "docker compose validation",
+        "reason": "当前机器没有 docker 命令。"
+      }
+    ]
+  },
+  "environment_blockers": [
+    {
+      "id": "ENV-01",
+      "title": "缺少可执行 Python",
+      "impact": "无法执行 py_compile、pytest、服务启动级验证。"
+    },
+    {
+      "id": "ENV-02",
+      "title": "缺少 Docker",
+      "impact": "无法通过容器补做服务启动和联通验证。"
+    }
+  ],
+  "design_mismatches_still_open": [
+    {
+      "id": "DOC-01",
+      "title": "当前仓库缺少远端任务里提到的 docs/design-facts 正式事实源目录",
+      "impact": "代码已修，但正式设计事实源仍未在本地仓库成体系落地。"
+    }
+  ],
+  "handoff_note": {
+    "ready_for_next_workstream": true,
+    "next_recommended_step": "让 community-skill 严格按新的 session/sync 合同做 fresh install 联通验证，并验证 group_session_declarations 与 group_context_updates 的真实消费。",
+    "not_done_on_purpose": [
+      "没有实现任何 group bootstrap 行为",
+      "没有删除 duplicated author_kind",
+      "没有把 openclaw-for-community 当主真相源"
+    ]
+  }
+}

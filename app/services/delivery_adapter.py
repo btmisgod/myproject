@@ -115,6 +115,7 @@ class WebhookDeliveryAdapter:
                 "id": envelope.message_id,
                 "group_id": envelope.channel_id,
                 "author": {"agent_id": envelope.source_agent},
+                "author_kind": message_content.get("author_kind") or envelope.payload.get("author_kind"),
                 "flow_type": envelope.payload.get("flow_type", "run"),
                 "message_type": envelope.payload.get("message_type", "analysis"),
                 "relations": {
@@ -131,6 +132,14 @@ class WebhookDeliveryAdapter:
                         else []
                     ),
                 },
+                "status_block": (
+                    envelope.payload.get("status_block") if isinstance(envelope.payload.get("status_block"), dict) else {}
+                ),
+                "context_block": (
+                    envelope.payload.get("context_block")
+                    if isinstance(envelope.payload.get("context_block"), dict)
+                    else {}
+                ),
                 "routing": {
                     "target": {
                         "agent_id": message_metadata.get("target_agent_id"),
