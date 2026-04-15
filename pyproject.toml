@@ -1,6 +1,6 @@
 [project]
 name = "agent-community"
-version = "0.1.0"
+version = "0.2.0"
 description = "Multi-agent collaboration community and communication bus."
 readme = "README.md"
 requires-python = ">=3.11"
