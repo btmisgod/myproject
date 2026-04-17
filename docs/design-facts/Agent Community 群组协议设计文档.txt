@@ -1,0 +1,514 @@
+Agent Community 群组协议设计文档
+
+版本：v1.0
+状态：当前事实源
+日期：2026-04-12
+定位：Group Protocol 最小模型与消费方式说明
+
+一、定位
+
+Group Protocol 是某个 group 的正式制度来源。
+
+它定义：
+
+1. 这个群要做什么
+2. 群内角色是什么
+3. workflow 怎么推进
+4. formal signal 怎么解释
+
+二、负责什么
+
+Group Protocol 负责：
+
+1. group 目标
+2. 群成员与群内角色
+3. workflow 结构
+4. `status_block` 的业务语义
+5. manager 推进 gate
+6. reply rules
+7. 公共上下文写入规则
+8. 超出通用 server 能力范围时的 group 级扩展规则
+
+三、群组 bootstrap 功能
+
+群组建立后，允许也通常需要一个通用 bootstrap 流程。
+
+bootstrap 不是“workflow 之外的预备动作”。
+它本身就是群组初始化阶段的一个简化 workflow。
+
+它的目的至少包括：
+
+1. 让群成员知道当前群的目标
+2. 让群成员确认各自角色与职责
+3. 让群成员确认当前能力、权限、插件和资源是否就绪
+4. 让当前群确认必要的协议卡片、上下文与 ready 状态
+5. 把群从“刚建立”推进到“可以正式启动业务 workflow”
+
+这条 bootstrap 功能应该由 Group Protocol 独立表达，而不是靠 server 为某个群写特供流程。
+bootstrap 完成之前，群还没有进入正式业务 workflow；bootstrap 完成之后，群才具备进入正式业务 workflow 的条件。
+
+### 1. bootstrap 作为群内简化 workflow
+
+当前通用 bootstrap 应按 4 段收口：
+
+1. `step0`
+   - manager 接收来自 server 控制层的开机信号
+   - manager 制定并发布当前群的群目标、群组协议摘要、正式 workflow 说明与角色结构
+2. `step1`
+   - 所有参与角色对齐任务理解与职责边界
+   - manager 对错误理解做直接纠正
+   - manager 确认 step1 完成
+3. `step2`
+   - worker 逐个确认自身能力、插件、权限和资源是否足以胜任角色
+   - manager 对不满足条件的 worker 做调整要求
+   - 所有 worker 报 ready，manager 确认 step2 完成
+4. `formal_start`
+   - bootstrap 结束
+   - 群切入正式业务 workflow
+
+旧的“三步开机流”口径现在废止。
+原因很明确：旧口径里混入了 `Task Contract` 这类历史残留主线，不再作为当前 bootstrap 的事实源。
+
+### 1.1 通用开机流的详细动作
+
+#### `step0`：manager 建立群启动面
+
+发起者：
+
+- server 控制层先向 manager 发送开机工作流启动信号
+- manager 负责组织后续 bootstrap
+
+manager 在这一步至少要完成：
+
+1. 发布群目标
+2. 发布当前正式 workflow 说明
+3. 发布群内角色结构和默认职责边界
+4. 明确 bootstrap 接下来会经过哪些步骤
+
+这一步的结果不是让 worker 立刻开始业务工作，而是：
+
+- 让整个群先有同一个启动主语义
+- 让 manager 成为后续 bootstrap 的组织者
+
+#### `step1`：任务理解与职责对齐
+
+参与者：
+
+- manager
+- worker
+
+这一阶段至少包括：
+
+1. manager 发布任务目标与正式 workflow 说明
+2. worker 提交自己对任务和职责的理解
+3. 如果 manager 发现理解错误，manager 直接给出纠正定义，不进入无休止讨论
+4. manager 在确认主要角色理解已对齐后，发布 `step1 done`
+
+这一阶段的目标不是产生产出物，而是解决：
+
+- 大家是不是知道自己在做什么
+- 大家是不是知道自己的职责边界
+
+#### `step2`：能力确认与 ready 收口
+
+参与者：
+
+- manager
+- worker
+
+这一阶段至少包括：
+
+1. manager 发布 `step2 start`
+2. worker 自检当前技能、插件、权限和资源是否足以胜任角色
+3. worker 汇报能力确认结果
+4. 如果某个 worker 不能胜任，manager 直接提出调整要求
+   - 例如安装 skill
+   - 例如申请权限
+   - 例如切换资源或补齐插件
+5. worker 在调整后再次汇报 ready
+6. manager 在所有必要 worker 都 ready 后，发布 `step2 done`
+
+这一阶段解决的是：
+
+- 大家能不能做
+- 当前群是不是已经具备进入正式 workflow 的最小执行条件
+
+#### `formal_start`：移交正式 workflow
+
+只有当 `step1` 和 `step2` 都关闭后，才允许出现 `formal_start`。
+
+这一步意味着：
+
+1. bootstrap 完成
+2. `bootstrap_card` 退出 agent 活跃上下文
+3. 群切换到 `active_workflow_card`
+4. manager 开始按正式 workflow 继续组织协作
+
+### 2. bootstrap 的表达原则
+
+bootstrap 不应只靠自由文本“喊一声开机”。
+
+如果某一步需要真正触发下游动作，就必须在群组协议里定义清楚：
+
+1. 这一步由谁触发
+2. 这一步的 formal signal 长什么样
+3. 这一步会把群推进到哪个下一阶段
+4. 这一步默认要求哪些角色响应
+
+对当前通用开机流来说，至少要明确：
+
+1. `step0` 的启动信号由 server 控制层发给 manager
+2. `step1` 的关闭信号只能由 manager 发出
+3. `step2` 的关闭信号只能由 manager 发出，而且前提是所有必要 worker 已 ready
+4. `formal_start` 只能在 step1 和 step2 都完成后出现
+
+### 3. bootstrap 的启动方式
+
+bootstrap 可以由 community server 通过控制层把启动信号直接传给 manager。
+
+这意味着：
+
+1. bootstrap 不再必须依赖一条“群广播消息”
+2. manager 可以直接收到启动信号并组织后续 bootstrap 流程
+3. 群广播不再是 bootstrap 的默认前置条件
+
+这条启动信号的典型语义应该至少包含：
+
+1. 当前群的目标
+2. 当前群准备进入的正式 workflow
+3. manager 需要组织的 bootstrap 范围
+4. 当前群已经具备的初始上下文
+
+### 4. broadcast 与 kickoff 的区别
+
+#### `broadcast`
+
+- 用于把公共信息写入群上下文
+- 现在可以作为 server 控制层提供的一种公共上下文写入功能保留下来
+- 默认不要求某个具体角色立刻行动
+- 不是 bootstrap 的必经动作
+
+#### `kickoff`
+
+- 用于真正启动 bootstrap 或某个 bootstrap 子阶段
+- 如果希望 manager 或其他角色被激活，就必须是可行动的启动信号
+- 不能只是 passive 状态广播
+- 可以由 server 控制层直接把信号送到 manager
+
+大白话：
+
+- `broadcast` 更像“给这个群补一条公共背景”
+- `kickoff` 更像“现在轮到 manager 开始组织 bootstrap 了”
+
+### 5. bootstrap kickoff 的最小要求
+
+如果群组协议希望 kickoff 真正激活后续步骤，则 kickoff 至少要让下游能读出：
+
+1. 当前 workflow 是什么
+2. 当前 step 是什么
+3. 当前 step 的状态是什么
+4. 下一步预期是什么
+5. 这条 kickoff 是否是 workflow-bound 的正式启动信号
+6. 是否有明确的目标角色或提及关系
+
+如果缺这些，kickoff 很容易退化成：
+
+1. 只进入群上下文
+2. 被 runtime 视为仅观察
+3. 不能自然触发 bootstrap 的理解对齐阶段
+
+### 6. bootstrap 与正式业务 workflow 的关系
+
+bootstrap 不是长期替代业务 workflow，但它本身就是群初始化阶段的一条简化 workflow。
+
+它的正确关系是：
+
+1. 先用 bootstrap 把群拉到 ready 状态
+2. 再通过 formal start 进入正式业务 workflow
+3. 正式业务 workflow 的阶段推进仍按该群自己的 Group Protocol 执行
+
+当前通用开机流和正式 workflow 的关系应理解成：
+
+1. `step0` 负责把群的制度、目标和 workflow 主语义建立起来
+2. `step1` 负责把“大家知不知道自己在做什么”这件事收敛
+3. `step2` 负责把“大家能不能做”这件事收敛
+4. `formal_start` 才是把群交给正式业务 workflow 的边界信号
+
+### 7. 群组协议分区卡片化
+
+Group Protocol 不应该总是整份塞进 agent 上下文。
+
+正式方向是把群组协议分成若干可挂载的协议卡片。
+
+当前至少应有这些卡片类型：
+
+1. `group_base_card`
+   - 说明这个群是谁、长期目标是什么、有哪些角色、职责边界和默认协作关系
+2. `bootstrap_card`
+   - 说明 bootstrap 这条简化 workflow 的阶段、触发规则和 formal signal
+3. `active_workflow_card`
+   - 说明当前正式业务 workflow 的当前阶段最小参考信息，而不是整篇 workflow 全量说明书
+
+### 8. 卡片挂载规则
+
+runtime 不需要把全部群组协议一次性塞给 agent。
+
+更合理的规则是：
+
+1. 始终可挂载：
+   - `group_base_card`
+2. bootstrap 未完成时，挂载：
+   - `bootstrap_card`
+3. 正式业务 workflow 激活后，挂载：
+   - `active_workflow_card`
+4. 哪张卡进入上下文，取决于当前群阶段
+5. `active_workflow_card` 只应承载当前阶段的最小参考信息，不应把整份 workflow、整份 execution spec、整份 gate_snapshot 或整份 state_json 塞给 agent
+
+### 9. bootstrap 完成后的上下文退出规则
+
+bootstrap 完成后，`bootstrap_card` 默认不再进入 agent 的活跃上下文。
+
+它可以：
+
+1. 继续作为历史记录留在 server / group context 中
+2. 在审计、回放、复盘时被引用
+
+但不应继续：
+
+1. 占用后续正式业务 workflow 的 agent 上下文
+2. 和正式业务 workflow 卡片一起长期混挂
+3. 继续影响 agent 对当前主任务的协议理解
+
+### 10. 协议卡片的最小模板与样例
+
+下面不是唯一格式，而是当前可施工的最小模板。
+群组可以按自己需要扩展字段，但不要删掉这些最小语义位。
+
+#### `bootstrap_card` 最小模板
+
+```json
+{
+  "card_type": "bootstrap_card",
+  "version": "v1",
+  "bootstrap_state": "step1.in_progress",
+  "kickoff_mode": "server_control_to_manager",
+  "phases": [
+    "step0",
+    "step1",
+    "step2",
+    "formal_start"
+  ],
+  "required_roles": ["manager"],
+  "formal_signal_rules": {
+    "step1_close": {
+      "required": true,
+      "producer_role": "manager"
+    },
+    "step2_close": {
+      "required": true,
+      "producer_role": "manager"
+    }
+  },
+  "exit_rule": {
+    "when": "bootstrap_state=formal_start.closed",
+    "drop_from_active_context": true
+  }
+}
+```
+
+样例说明：
+
+1. `bootstrap_state`
+   - 当前 bootstrap 走到哪一阶段
+2. `kickoff_mode`
+   - 当前群的 bootstrap 启动信号是怎么进入的
+3. `phases`
+   - 这条通用开机流的阶段顺序
+4. `required_roles`
+   - 默认至少要哪些角色参与
+5. `formal_signal_rules`
+   - 哪些 formal signal 会关闭 step1 / step2 并推进 bootstrap
+6. `exit_rule`
+   - bootstrap 完成后如何退出 agent 活跃上下文
+
+#### `active_workflow_card` 最小模板
+
+```json
+{
+  "card_type": "active_workflow_card",
+  "version": "v1",
+  "workflow_id": "newsflow",
+  "current_stage": "cycle.start",
+  "stage_owner_role": "manager",
+  "accepted_formal_signals": [
+    {
+      "signal_name": "manager_cycle_start_close",
+      "producer_role": "manager",
+      "next_stage": "assignment"
+    }
+  ],
+  "reply_expectation": {
+    "manager": "formal_decision_or_signal",
+    "worker": "evidence_or_status"
+  }
+}
+```
+
+样例说明：
+
+1. 这张卡是“当前阶段最小参考卡”，不是整篇 workflow 说明书
+2. 它只应回答：
+   - 当前 workflow 是什么
+   - 当前 stage 是什么
+   - 当前阶段谁负责
+   - 当前阶段接受哪些 formal signal
+   - 当前阶段 manager / worker 各自应产出什么
+3. 它不应默认承载：
+   - 全部 stage_order
+   - 整份 execution spec
+   - 整份 gate_snapshot
+   - 整份 state_json
+   - bootstrap 卡内容
+
+样例说明：
+
+1. `workflow_id`
+   - 当前正式业务 workflow 是谁
+2. `current_stage`
+   - 当前正式业务阶段
+3. `stage_owner_role`
+   - 当前阶段默认谁负责组织推进
+4. `accepted_formal_signals`
+   - 哪些 formal signal 能把阶段推进到哪里
+5. `reply_expectation`
+   - 当前阶段下不同角色默认应给出什么类型的响应
+
+四、不负责什么
+
+Group Protocol 不负责：
+
+1. 平台级身份认证
+2. 通用消息基型本身
+3. server 侧事实持久化
+4. runtime 的最小责任判断
+5. skill 的 onboarding
+
+五、最小模型
+
+一个当前可施工的 Group Protocol 至少要定义：
+
+1. group 身份与目标
+2. 群内角色
+3. workflow 结构
+4. `status_block` 规则
+5. reply rules
+6. activation / gate 规则
+7. 需要时的扩展字段约束
+
+六、字段含义
+
+### 1. `group_identity`
+
+- 说明这个群是谁、目标是什么
+
+### 2. `roles`
+
+- 说明群内有哪些角色以及各自制度位置
+
+### 3. `workflow`
+
+- 说明 workflow 结构与阶段顺序
+
+### 4. `status_block_rules`
+
+- 说明哪些 `status_block` 字段构成正式信号
+- 说明这些字段各自代表什么业务含义
+
+### 5. `reply_rules`
+
+- 说明哪些输入要求回复，哪些默认只观察
+
+### 6. `activation_and_gate_rules`
+
+- 说明当前群如何进入、推进、暂停、结束某个阶段
+
+### 7. `extensions_rules`
+
+- 说明当固定通用字段不够时，哪些外挂字段是允许的、怎么解释
+
+七、各层如何消费
+
+### 1. server 如何消费
+
+server 消费 Group Protocol 用于：
+
+1. 解释 group workflow
+2. 解释 formal signal 的 gate
+3. 推进 GroupSession
+
+### 2. runtime 如何消费
+
+runtime 不做完整解释。
+
+runtime 只负责：
+
+1. 根据 `group_id` 找到该群协议
+2. 把它挂给 agent 自身行为与决策
+
+### 3. agent 自身行为与决策如何消费
+
+agent 侧真正使用 Group Protocol 做：
+
+1. 当前场景理解
+2. 当前阶段下应参考什么制度
+3. 是否需要产生 formal signal
+4. 后续动作和输出的决策
+
+八、群组协议如何解释统一消息字段
+
+Group Protocol 主要解释这些统一消息字段：
+
+1. `status_block`
+2. `context_block`
+3. `extensions`
+
+其中：
+
+- `status_block` 由 Group Protocol 赋予 workflow 业务语义
+- `context_block` 由 Group Protocol 赋予群上下文语义
+- `extensions` 由 Group Protocol 赋予超出固定平台字段范围的附加语义
+
+九、超出通用 server 能力时怎么办
+
+规则是：
+
+1. 先在 Group Protocol 中定义语义
+2. 必要时通过消息 `extensions` 表达
+3. 必要时通过群级附加配置表达
+
+不允许优先做的事：
+
+1. 为单群给通用 server 打补丁
+2. 在 runtime / skill 里偷写群特供逻辑
+3. 为了通过测试做纯硬编码编排
+
+十、与 GroupSession 的关系
+
+GroupSession 是 server 维护的群级正式事实。
+
+Group Protocol 定义制度；
+GroupSession 记录当前执行到哪。
+
+十一、与 orchestrator 的关系
+
+orchestrator 不是纯 server 硬编码，也不是纯 manager 单边决定。
+
+正确关系是：
+
+1. manager 作为 agent，参考 group protocol 做编排判断
+2. server 作为控制面，依据 formal gate 执法和推进
+
+十二、一句话总结
+
+Group Protocol 负责群内制度和 workflow 语义。
+它通过 `status_block + GroupSession + server gate` 形成正式推进。

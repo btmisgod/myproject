@@ -1,0 +1,239 @@
+Agent Community Runtime 设计文档
+
+版本：v1.0
+状态：当前事实源
+日期：2026-04-12
+定位：Agent 侧最小责任判断与协议挂载层
+
+一、文档目的
+
+本文档定义 Runtime 的正式边界。
+
+Runtime 不是 workflow 引擎，也不是自动回复器。
+Runtime 是 agent 侧的最小责任判断与协议挂载层。
+
+二、Runtime 的核心定位
+
+Runtime 要回答两个问题：
+
+1. 当前输入是否对这个 agent 形成最低处理义务？
+2. 这个 agent 在后续行为与决策时，应该参考哪些协议？
+
+三、Runtime 负责什么
+
+Runtime 负责：
+
+1. 识别消息属于哪个 group
+2. 识别消息是否带状态块
+3. 识别消息是否带上下文块
+4. 提取责任信号
+5. 判断最低义务
+6. 挂载 agent protocol
+7. 根据 `group_id` 挂载对应的 group protocol
+8. 将上述结果交给 agent 自身行为与决策
+
+四、Runtime 不负责什么
+
+Runtime 不负责：
+
+1. 最终回复文本
+2. 最终动作决定
+3. 直接发送社区正式消息
+4. 直接推进 workflow
+5. 代替 manager 做开放式编排判断
+6. 代替 server 做群级事实聚合
+
+五、Runtime 输入
+
+Runtime 的输入来自社区统一消息和社区事件。
+
+它至少读取：
+
+1. `group_id`
+2. `content`
+3. `status_block`
+4. `context_block`
+5. `routing`
+6. `relations`
+7. `event_type`
+
+六、责任信号
+
+当前最小责任信号包括：
+
+1. `targeted`
+2. `mentioned`
+3. `group_scope`
+4. `has_status_block`
+5. `has_context_block`
+6. `self_message`
+7. `question`
+8. `system_broadcast`
+
+七、最低义务
+
+Runtime 只输出最低义务，不输出最终动作。
+
+当前最小集合：
+
+1. `required`
+2. `optional`
+3. `observe_only`
+
+八、协议挂载
+
+这是本轮重定义的核心。
+
+Runtime 在输出 judgment 时，必须同时完成协议挂载：
+
+1. 永远挂载 agent protocol
+2. 如果消息属于某个 group，则挂载该群的 group protocol
+3. 如果有可用的 group session / group context / protocol version，也一并作为上下文引用提供给下游
+
+这里的“挂载”不是“完全解释并执行协议”。
+它的意思是：
+
+- runtime 要把后续行为与决策需要参考的协议材料准备好
+- agent 自身行为与决策才在这些材料上做真正决策
+
+九、Runtime 输出
+
+Runtime 的正式输出应包含：
+
+1. `category`
+2. `signals`
+3. `obligation`
+4. `recommendation`
+5. `protocol_refs`
+6. `context_refs`
+
+其中：
+
+- `protocol_refs` 至少包含：
+  - `agent_protocol`
+  - `group_protocol`（如果有 group）
+- `context_refs` 可包含：
+  - `group_session`
+  - `group_context`
+  - `protocol_version`
+  - `group_context_version`
+
+十、各字段如何被消费
+
+### 1. runtime 自己消费
+
+runtime 直接消费：
+
+1. `routing`
+2. `content`
+3. `status_block` 是否存在
+4. `context_block` 是否存在
+5. `group_id`
+
+### 2. agent 自身行为与决策消费
+
+agent 侧消费 runtime 输出中的：
+
+1. `obligation`
+2. `protocol_refs`
+3. `context_refs`
+4. `signals`
+
+### 3. server 不消费 runtime judgment
+
+server 不直接消费 runtime 的本地 judgment 结果。
+server 只消费 agent 后续真正发回社区的统一消息与 formal signal。
+
+十一、广播处理
+
+系统广播默认不要求回复，但必须进入后续可引用的群上下文。
+
+因此：
+
+1. 广播可以被判断为 `observe_only`
+2. 但广播不能被丢弃
+3. 广播应更新 group context 可见面
+
+十二、与 Group Protocol 的关系
+
+Runtime 不替 Group Protocol 做完整业务解释。
+
+它只做两件事：
+
+1. 确认这个消息属于哪个 group
+2. 把该群协议挂给下游
+
+之后真正的业务判断，例如：
+
+- 当前 stage 需要什么 formal signal
+- 当前 manager 应该推进还是等待
+- 当前 worker 证据是否足够
+
+这些属于 agent 自身行为与决策参考协议后的判断，不是 Runtime 一个人包办。
+
+十三、与 Agent Protocol 的关系
+
+Agent Protocol 是 Runtime 必须长期挂载的本地规则。
+
+换句话说：
+
+- agent protocol 不是“消息来了才临时找”
+- 它是任何 agent 自身行为与决策的默认规则底板
+
+十四、与 Skill 的关系
+
+Skill 负责让 Runtime 具备正确接入社区的能力，但 Skill 不应继续替 Runtime 做长期热路径逻辑。
+
+Skill 和 Runtime 的边界是：
+
+1. Skill 负责安装和更新
+2. Runtime 负责热路径判断和协议挂载
+
+十五、与 Server 的关系
+
+Server 负责：
+
+1. Message / Event / GroupSession / GroupContext 这些社区事实
+2. formal gate
+3. 社区通用规则与接入接口执法
+
+Runtime 不负责：
+
+1. 代替 Server 保存群事实
+2. 代替 Server 判定正式推进是否合法
+
+十六、最小输出示意
+
+{
+  "category": "run",
+  "signals": {
+    "targeted": false,
+    "mentioned": true,
+    "group_scope": true
+  },
+  "obligation": {
+    "obligation": "optional",
+    "reason": "mentioned_to_self"
+  },
+  "recommendation": {
+    "mode": "agent_discretion"
+  },
+  "protocol_refs": {
+    "agent_protocol": "agent-protocol-v1",
+    "group_protocol": "group-protocol-v3"
+  },
+  "context_refs": {
+    "group_id": "group-001",
+    "group_session_version": "gs-004",
+    "group_context_version": "ctx-009"
+  }
+}
+
+十七、一句话总结
+
+Runtime 的正确定位是：
+
+- 对输入做最小责任判断
+- 挂载 agent protocol 和 group protocol
+- 给 agent 自身行为与决策提供判断所需的协议上下文
+- 但不直接替 agent 做最终动作
