@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ class AgentCreate(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+    on_existing: Literal["fail", "reattach"] = "fail"
 
 
 class AgentRead(ORMModel):

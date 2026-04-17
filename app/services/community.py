@@ -7,7 +7,6 @@ from typing import Any
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.security import generate_agent_token, hash_token
 from app.models.agent import Agent, GroupMembership, Presence
@@ -29,19 +28,17 @@ from app.schemas.tasks import (
     TaskStatusUpdateRequest,
 )
 from app.schemas.webhooks import WebhookSubscriptionCreate
-from app.services.channel_protocol_binding import COMMUNITY_PROTOCOLS_KEY
 from app.services.event_bus import append_event, publish_event, stabilize_event_snapshot
 from app.services.group_session import (
     build_group_session_view,
     ensure_group_session_fact,
     group_session_event_payload,
-    sync_agent_session,
     update_group_session_from_message,
 )
 from app.services.message_envelope import MessageEnvelope, MessageMention, MessageTarget, envelope_timestamp_now
 from app.services.message_protocol_mapper import normalize_message_to_canonical_v2, serialize_message_v2
 from app.services.protocol_validation_hook import _deliver_protocol_violation_feedback, _load_channel_protocol_context
-from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, current_protocol_document, ensure_group_protocol_metadata, group_context, group_protocol_context, update_group_protocol_metadata
+from app.services.protocol_manager import PROFILE_RULE_ID, PROTOCOL_VERSION, agent_protocol_context, ensure_group_protocol_metadata, group_context, group_protocol_context, update_group_protocol_metadata
 from app.services.protocol_validator import build_validation_request, validate_protocol_request
 
 logger = logging.getLogger(__name__)
@@ -292,10 +289,47 @@ def _group_protocol_context(group: Group) -> dict[str, Any]:
     return group_protocol_context(group)
 
 
-async def register_agent(session: AsyncSession, payload: AgentCreate) -> tuple[Agent, str]:
+async def register_agent(
+    session: AsyncSession,
+    payload: AgentCreate,
+    *,
+    admin_user: Any | None = None,
+) -> tuple[Agent, str]:
     existing = await session.scalar(select(Agent).where(Agent.name == payload.name))
     if existing:
-        raise AppError("agent name already exists", code="agent_exists", status_code=409)
+        if payload.on_existing != "reattach":
+            raise AppError("agent name already exists", code="agent_exists", status_code=409)
+        if admin_user is None:
+            raise AppError(
+                "reattach existing agent requires admin bearer token",
+                code="admin_required_for_agent_reattach",
+                status_code=403,
+            )
+        token = generate_agent_token()
+        existing_metadata = dict(existing.metadata_json or {})
+        incoming_metadata = dict(payload.metadata_json or {})
+        merged_metadata = {**existing_metadata, **incoming_metadata}
+        existing_profile = (
+            existing_metadata.get("profile") if isinstance(existing_metadata.get("profile"), dict) else {}
+        )
+        incoming_profile = (
+            incoming_metadata.get("profile") if isinstance(incoming_metadata.get("profile"), dict) else {}
+        )
+        defaults = _default_agent_profile(
+            existing.name,
+            payload.description or existing.description,
+            existing.is_moderator,
+        )
+        merged_metadata["profile"] = _normalized_profile(defaults, {**existing_profile, **incoming_profile})
+        community_meta = existing_metadata.get("community") if isinstance(existing_metadata.get("community"), dict) else {}
+        profile_completed = bool(community_meta.get("profile_completed"))
+        existing.description = payload.description or existing.description
+        existing.metadata_json = _community_agent_metadata(merged_metadata, profile_completed=profile_completed)
+        existing.token_hash = hash_token(token)
+        existing.is_active = True
+        await session.commit()
+        await session.refresh(existing)
+        return existing, token
 
     token = generate_agent_token()
     metadata = dict(payload.metadata_json or {})
@@ -419,7 +453,13 @@ async def join_group(session: AsyncSession, group_id: uuid.UUID, actor: Agent) -
 
 async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any) -> Message:
     principal = _principal_agent(actor)
-    group = await get_group_or_404(session, payload.group_id)
+    # Message posting updates group-scoped authoritative session facts that are
+    # stored inside Group.metadata_json. Multiple agents may post into the same
+    # group concurrently, so we serialize writers on the group row to prevent
+    # last-writer-wins JSONB overwrites from dropping observed status entries.
+    group = await session.scalar(select(Group).where(Group.id == payload.group_id).with_for_update())
+    if group is None:
+        raise AppError("group not found", code="group_not_found", status_code=404)
     payload_dump = payload.model_dump(mode="json")
     canonical_message_v2 = normalize_message_to_canonical_v2(payload_dump)
     # MessageCreate has already passed server-side normalization once. Keep its
@@ -430,11 +470,29 @@ async def post_message(session: AsyncSession, payload: MessageCreate, actor: Any
         canonical_message_v2["author_kind"] = resolved_author_kind
         canonical_author = canonical_message_v2.get("author") if isinstance(canonical_message_v2.get("author"), dict) else {}
         canonical_message_v2["author"] = {**canonical_author, "author_kind": resolved_author_kind}
+    resolved_status_block = _structured_message_block(payload.status_block)
+    if resolved_status_block:
+        canonical_message_v2["status_block"] = resolved_status_block
+        canonical_content = canonical_message_v2.get("content") if isinstance(canonical_message_v2.get("content"), dict) else {}
+        canonical_payload = canonical_content.get("payload") if isinstance(canonical_content.get("payload"), dict) else {}
+        canonical_message_v2["content"] = {
+            **canonical_content,
+            "payload": {
+                **canonical_payload,
+                "status_block": resolved_status_block,
+            },
+            "status_block": resolved_status_block,
+        }
     resolved_context_block = _structured_message_block(payload.context_block)
     if resolved_context_block:
         canonical_message_v2["context_block"] = resolved_context_block
         canonical_content = canonical_message_v2.get("content") if isinstance(canonical_message_v2.get("content"), dict) else {}
+        canonical_payload = canonical_content.get("payload") if isinstance(canonical_content.get("payload"), dict) else {}
         canonical_message_v2["content"] = {**canonical_content, "context_block": resolved_context_block}
+        canonical_message_v2["content"]["payload"] = {
+            **canonical_payload,
+            "context_block": resolved_context_block,
+        }
     validation_payload = canonical_message_v2
     requested_system_broadcast = canonical_message_v2.get("author_kind") == "system"
     trusted_system_broadcast = requested_system_broadcast and _is_admin_protocol_exempt(actor)
@@ -1041,6 +1099,7 @@ async def update_group_protocol(
         group_slug=group.slug,
         group_protocol=group_protocol,
     )
+    ensure_group_session_fact(group)
     await session.commit()
     await session.refresh(group)
     return group

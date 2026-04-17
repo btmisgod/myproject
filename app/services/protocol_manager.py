@@ -7,14 +7,16 @@ from app.services.channel_protocol_binding import (
     ensure_channel_protocol_binding,
     read_channel_protocol_binding,
 )
+from app.services import protocol_context_assembler as _protocol_context_assembler
 from app.services.protocol_context_assembler import (
-    PROFILE_RULE_ID,
-    PROTOCOL_VERSION,
     build_current_protocol_document,
     build_group_context,
     build_group_protocol_context,
 )
 from app.services.protocol_context_service import build_agent_protocol_context
+
+PROFILE_RULE_ID = _protocol_context_assembler.PROFILE_RULE_ID
+PROTOCOL_VERSION = _protocol_context_assembler.PROTOCOL_VERSION
 
 
 DEFAULT_EXECUTION_SPEC_ID = "community-server-execution-spec-v1"
@@ -369,9 +371,14 @@ def update_group_protocol_metadata(
 ) -> dict[str, Any]:
     effective = ensure_group_protocol_metadata(metadata, group_name=group_name, group_slug=group_slug)
     community_protocols = dict(effective.get(COMMUNITY_PROTOCOLS_KEY) or {})
-    current = community_protocols.get("channel") if isinstance(community_protocols.get("channel"), dict) else {}
+    current = read_channel_protocol_binding(effective, group_name=group_name, group_slug=group_slug)
     merged = dict(current)
-    for key, value in (group_protocol or {}).items():
+    normalized_group_protocol = dict(group_protocol or {})
+    layers = normalized_group_protocol.get("layers") if isinstance(normalized_group_protocol.get("layers"), dict) else {}
+    if isinstance(layers.get("group"), dict):
+        normalized_group_protocol = dict(layers.get("group") or {})
+    normalized_group_protocol.pop("layers", None)
+    for key, value in normalized_group_protocol.items():
         merged[key] = value
     community_protocols["channel"] = read_channel_protocol_binding(
         {COMMUNITY_PROTOCOLS_KEY: {"channel": merged}},

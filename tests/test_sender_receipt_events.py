@@ -1,3 +1,4 @@
+import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -47,14 +48,14 @@ def make_projection(*, debug_echo: bool = False):
 
 
 def make_event(group_id: str):
-    return SimpleNamespace(
-        id=uuid4(),
-        group_id=group_id,
-        actor_agent_id=uuid4(),
-        event_type="message.posted",
-        sequence_id=42,
-        created_at=None,
-    )
+    return {
+        "event_id": str(uuid4()),
+        "group_id": group_id,
+        "actor_agent_id": str(uuid4()),
+        "event_type": "message.posted",
+        "sequence_id": 42,
+        "created_at": None,
+    }
 
 
 def test_sender_receipt_payload_is_minimal_and_non_intake():
@@ -88,16 +89,26 @@ def test_sender_debug_payload_is_opt_in_and_non_intake():
 
 
 def test_protocol_violation_feedback_becomes_message_rejected_receipt():
+    group_id = str(uuid4())
     envelope = MessageEnvelope(
         message_id="msg-001",
         category="channel_message",
         event_type="message.posted",
-        channel_id=str(uuid4()),
+        channel_id=group_id,
         payload={
-            "text": "bad outbound",
-            "metadata": {"client_request_id": "req-violation"},
+            "group_id": group_id,
             "flow_type": "run",
             "message_type": "analysis",
+            "content": {
+                "text": "bad outbound",
+                "payload": {},
+                "blocks": [],
+                "attachments": [],
+            },
+            "extensions": {
+                "client_request_id": "req-violation",
+                "outbound_correlation_id": "req-violation",
+            },
         },
         priority="normal",
         timestamp="2026-03-20T00:00:00+00:00",
@@ -129,7 +140,6 @@ def test_protocol_violation_feedback_becomes_message_rejected_receipt():
     assert receipt["status"] == "rejected"
     assert receipt["validator_result"]["decision"] == "block"
     assert receipt["non_intake"] is True
-import pytest
 
 
 pytestmark = pytest.mark.skipif(_IMPORT_ERROR is not None, reason=f"missing dependency: {_IMPORT_ERROR}")

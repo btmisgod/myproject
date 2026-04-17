@@ -57,6 +57,20 @@ async def get_current_admin_user(
     return admin_user
 
 
+async def get_optional_admin_user(
+    session: DbSession,
+    authorization: Annotated[str | None, Header()] = None,
+    access_token: Annotated[str | None, Query(alias="access_token")] = None,
+) -> AdminUser | None:
+    if not authorization and not access_token:
+        return None
+    return await get_current_admin_user(
+        session,
+        authorization=authorization,
+        access_token=access_token,
+    )
+
+
 async def get_current_actor(
     session: DbSession,
     x_agent_token: Annotated[str | None, Header()] = None,

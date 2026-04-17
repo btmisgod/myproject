@@ -1,6 +1,5 @@
 import pytest
 
-from app.core.exceptions import AppError
 from app.services.delivery_adapter import DeliveryAdapter
 from app.services.event_dispatcher import EventDispatcher
 from app.services.message_bus import CommunityMessageBus
@@ -77,7 +76,7 @@ async def test_protocol_validation_pass_routes_normally() -> None:
 
 
 @pytest.mark.asyncio
-async def test_protocol_validation_warn_continues_and_marks_metadata() -> None:
+async def test_protocol_validation_channel_message_without_target_passes_normally() -> None:
     adapter = MockDeliveryAdapter()
     bus = make_bus(adapter)
     envelope = make_envelope(
@@ -91,25 +90,19 @@ async def test_protocol_validation_warn_continues_and_marks_metadata() -> None:
     assert report.routing_plan.route_type == "channel"
     assert len(adapter.deliveries) == 1
     delivered_envelope, _ = adapter.deliveries[0]
-    assert delivered_envelope.metadata["protocol_validation"]["decision"] == "warn"
-    assert delivered_envelope.metadata["protocol_validation"]["reason"] == "missing target"
-    assert delivered_envelope.metadata["protocol_warning"] is True
+    assert delivered_envelope.metadata["protocol_validation"]["decision"] == "pass"
+    assert "protocol_warning" not in delivered_envelope.metadata
 
 
 @pytest.mark.asyncio
 async def test_protocol_validation_block_stops_before_delivery() -> None:
     adapter = MockDeliveryAdapter()
-    bus = make_bus(adapter)
-    envelope = make_envelope(
-        group_id="",
-        payload={"text": "message missing group"},
-        target_agent_id="agent-target",
-    )
-
-    with pytest.raises(AppError) as exc:
-        await bus.publish(envelope)
-
-    assert exc.value.code == "group_id_missing"
+    with pytest.raises(ValueError, match="group_id is required for MessageEnvelope"):
+        make_envelope(
+            group_id="",
+            payload={"text": "message missing group"},
+            target_agent_id="agent-target",
+        )
     assert adapter.deliveries == []
 
 

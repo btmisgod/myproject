@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   apiBase: localStorage.getItem("community.apiBase") || "/api/v1",
   token: localStorage.getItem("community.token") || "",
   humanAccessToken: localStorage.getItem("community.humanAccessToken") || "",
@@ -12,6 +12,7 @@ const state = {
   eventSource: null,
   snapshot: null,
   groupMessages: [],
+  groupSession: null,
   membersById: new Map(),
   presenceById: new Map(),
   boardMode: localStorage.getItem("community.boardMode") || "small",
@@ -156,17 +157,17 @@ function formatRelativeTime(value) {
   }
   const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
   if (Math.abs(diffMinutes) < 1) {
-    return "刚刚";
+    return "鍒氬垰";
   }
   if (Math.abs(diffMinutes) < 60) {
-    return diffMinutes > 0 ? `${diffMinutes} 分钟后` : `${Math.abs(diffMinutes)} 分钟前`;
+    return diffMinutes > 0 ? `${diffMinutes} 鍒嗛挓鍚巂 : `${Math.abs(diffMinutes)} 鍒嗛挓鍓峘;
   }
   const diffHours = Math.round(diffMinutes / 60);
   if (Math.abs(diffHours) < 24) {
-    return diffHours > 0 ? `${diffHours} 小时后` : `${Math.abs(diffHours)} 小时前`;
+    return diffHours > 0 ? `${diffHours} 灏忔椂鍚巂 : `${Math.abs(diffHours)} 灏忔椂鍓峘;
   }
   const diffDays = Math.round(diffHours / 24);
-  return diffDays > 0 ? `${diffDays} 天后` : `${Math.abs(diffDays)} 天前`;
+  return diffDays > 0 ? `${diffDays} 澶╁悗` : `${Math.abs(diffDays)} 澶╁墠`;
 }
 
 function messageText(content) {
@@ -187,37 +188,59 @@ function messageText(content) {
 }
 
 const WORKFLOW_STAGE_LABELS = {
-  step1: "步骤 1 / 启动对齐",
-  step2: "步骤 2 / 能力确认",
-  step3: "步骤 3 / 就绪确认",
-  task_start: "正式开工",
-  task_plan: "任务规划",
-  material_collect: "素材收集",
-  draft_compile: "成稿整理",
-  final_deliver: "最终交付",
+  step1: "姝ラ 1 / 鍚姩瀵归綈",
+  step2: "姝ラ 2 / 鑳藉姏纭",
+  step3: "姝ラ 3 / 灏辩华纭",
+  task_start: "姝ｅ紡寮€宸?,
+  task_plan: "浠诲姟瑙勫垝",
+  material_collect: "绱犳潗鏀堕泦",
+  draft_compile: "鎴愮鏁寸悊",
+  final_deliver: "鏈€缁堜氦浠?,
+  "cycle.start": "Cycle Start",
+  "material.collect": "Material Collect",
+  "material.review": "Material Review",
+  "draft.compose": "Draft Compose",
+  "draft.proofread": "Draft Proofread",
+  "draft.revise": "Draft Revise",
+  "draft.recheck": "Draft Recheck",
+  "publish.decision": "Publish Decision",
+  "report.publish": "Report Publish",
+  "product.test": "Product Test",
+  "product.benchmark": "Product Benchmark",
+  "product.cross_cycle_compare": "Cross-cycle Compare",
+  "product.report": "Product Report",
+  "retrospective.plan": "Retrospective Plan",
+  "retrospective.discussion": "Retrospective Discussion",
+  "optimization.rule.apply": "Optimization Rule Apply",
 };
 
 const ROLE_LABELS = {
-  manager: "经理",
-  worker: "执行者",
-  material_collect: "素材收集",
-  draft_compile: "成稿整理",
-  server: "服务端",
-  system: "系统",
+  manager: "缁忕悊",
+  worker: "鎵ц鑰?,
+  worker_a: "Worker A",
+  worker_b: "Worker B",
+  editor: "Editor",
+  tester: "Tester",
+  material_collect: "绱犳潗鏀堕泦",
+  draft_compile: "鎴愮鏁寸悊",
+  server: "鏈嶅姟绔?,
+  system: "绯荤粺",
 };
 
 const PAYLOAD_KIND_LABELS = {
-  bootstrap_task_brief: "开机任务简报",
-  startup_plan: "启动计划",
-  capability_summary: "能力确认总结",
-  readiness_summary: "就绪确认总结",
-  startup_handoff_package: "开工交接包",
-  task_plan: "任务规划",
-  candidate_material_pool: "候选素材池",
-  approved_material_pool: "素材审批结果",
-  draft_report_v1: "新闻成稿",
-  draft_acceptance: "成稿验收",
-  final_report: "最终报告",
+  bootstrap_task_brief: "寮€鏈轰换鍔＄畝鎶?,
+  cycle_start_brief: "Cycle Start Brief",
+  cycle_task_plan: "Cycle Task Plan",
+  startup_plan: "鍚姩璁″垝",
+  capability_summary: "鑳藉姏纭鎬荤粨",
+  readiness_summary: "灏辩华纭鎬荤粨",
+  startup_handoff_package: "寮€宸ヤ氦鎺ュ寘",
+  task_plan: "浠诲姟瑙勫垝",
+  candidate_material_pool: "鍊欓€夌礌鏉愭睜",
+  approved_material_pool: "绱犳潗瀹℃壒缁撴灉",
+  draft_report_v1: "鏂伴椈鎴愮",
+  draft_acceptance: "鎴愮楠屾敹",
+  final_report: "鏈€缁堟姤鍛?,
 };
 
 function messagePayload(content) {
@@ -229,6 +252,164 @@ function messagePayload(content) {
   }
   const payload = content.payload;
   return payload && typeof payload === "object" ? payload : {};
+}
+
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function firstNonEmptyObject(values = []) {
+  for (const value of values) {
+    const candidate = objectValue(value);
+    if (Object.keys(candidate).length) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function messageStatusBlock(message) {
+  return objectValue(message?.status_block);
+}
+
+function messageFormalWorkflowId(message) {
+  return String(messageStatusBlock(message).workflow_id || "").trim();
+}
+
+function messageFormalStageId(message) {
+  return String(messageStatusBlock(message).step_id || "").trim();
+}
+
+function messageFormalStepStatus(message) {
+  return String(messageStatusBlock(message).step_status || "").trim();
+}
+
+function messageFormalRole(message) {
+  return String(messageStatusBlock(message).author_role || "").trim();
+}
+
+function embeddedExecutionSpec(snapshot = state.snapshot) {
+  const metadata = objectValue(snapshot?.group?.metadata_json);
+  const protocols = objectValue(metadata.community_protocols);
+  const channel = objectValue(protocols.channel);
+  return objectValue(channel.execution_spec);
+}
+
+function normalizedIdList(values) {
+  return Array.isArray(values)
+    ? values.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+}
+
+function protocolRoleForAgent(agentId, snapshot = state.snapshot) {
+  const rawId = String(agentId || "").trim();
+  if (!rawId) {
+    return "";
+  }
+  const roleDirectory = objectValue(embeddedExecutionSpec(snapshot).role_directory);
+  if (normalizedIdList(roleDirectory.manager_agent_ids).includes(rawId)) {
+    return "manager";
+  }
+  if (normalizedIdList(roleDirectory.worker_agent_ids).includes(rawId)) {
+    return "worker";
+  }
+  return "";
+}
+
+function heuristicRoleForAgent(agentId) {
+  const member = state.membersById.get(agentId);
+  const profile = agentProfile(member);
+  const raw = `${profile.identity || ""} ${member?.role || ""} ${member?.name || ""}`.toLowerCase();
+  if (raw.includes("editor")) {
+    return "editor";
+  }
+  if (raw.includes("tester")) {
+    return "tester";
+  }
+  if (raw.includes("worker_a") || raw.includes("worker-a") || raw.includes("worker 33") || raw.includes("worker-33")) {
+    return "worker_a";
+  }
+  if (raw.includes("worker_b") || raw.includes("worker-b") || raw.includes("worker xhs") || raw.includes("worker-xhs")) {
+    return "worker_b";
+  }
+  if (raw.includes("worker")) {
+    return "worker";
+  }
+  return "";
+}
+
+function effectiveAgentRole(agentId, snapshot = state.snapshot) {
+  return protocolRoleForAgent(agentId, snapshot) || heuristicRoleForAgent(agentId) || "";
+}
+
+function messageEffectiveRole(message) {
+  return effectiveAgentRole(messageAuthorId(message)) || messageFormalRole(message);
+}
+
+function messageRoleMismatch(message) {
+  const declaredRole = messageFormalRole(message);
+  const effectiveRole = effectiveAgentRole(messageAuthorId(message));
+  return Boolean(declaredRole && effectiveRole && declaredRole !== effectiveRole);
+}
+
+function isAuthoritativeFormalSignal(message) {
+  if (!workflowStageIdOf(message) && !messageFormalStepStatus(message)) {
+    return false;
+  }
+  return !messageRoleMismatch(message);
+}
+
+function snapshotEmbeddedGroupSession(snapshot) {
+  const communityV2 = objectValue(objectValue(snapshot?.group?.metadata_json).community_v2);
+  return objectValue(communityV2.group_session);
+}
+
+function groupSessionFromEvent(event) {
+  const payload = objectValue(event?.payload);
+  return firstNonEmptyObject([payload.group_session, payload.group_session_declaration]);
+}
+
+function latestProjectedGroupSession(snapshot) {
+  const events = Array.isArray(snapshot?.latest_events) ? snapshot.latest_events : [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (String(events[index]?.event_type || "") !== "group_session.updated") {
+      continue;
+    }
+    const sessionView = groupSessionFromEvent(events[index]);
+    if (sessionView) {
+      return sessionView;
+    }
+  }
+  return null;
+}
+
+function authoritativeGroupSession(snapshot = state.snapshot, directSession = state.groupSession) {
+  return firstNonEmptyObject([
+    directSession,
+    snapshotEmbeddedGroupSession(snapshot),
+    latestProjectedGroupSession(snapshot),
+  ]);
+}
+
+function gateSnapshotOf(groupSession) {
+  return objectValue(groupSession?.gate_snapshot);
+}
+
+function authoritativeStageLabel(groupSession) {
+  const stageId = String(groupSession?.current_stage || "").trim();
+  return stageId ? readableStageLabel(stageId) : "鏈彁渚?;
+}
+
+function authoritativeGroupMeta(group, groupSession) {
+  const sessionView = objectValue(groupSession);
+  if (group && String(sessionView.group_id || "") === String(group.id || "")) {
+    return [
+      sessionView.workflow_id,
+      sessionView.current_mode,
+      authoritativeStageLabel(sessionView),
+    ].filter(Boolean).join(" / ");
+  }
+  return group?.slug || group?.group_type || "group_session";
 }
 
 function readableStageLabel(value) {
@@ -247,8 +428,7 @@ function readablePayloadKindLabel(value) {
 }
 
 function workflowStageIdOf(message) {
-  const payload = messagePayload(message);
-  return payload.step_id || payload.step || payload.stage_id || payload.stage || "";
+  return messageFormalStageId(message);
 }
 
 function relatedMessageIdOf(message) {
@@ -267,7 +447,7 @@ function valueText(value) {
     return String(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => valueText(item)).filter(Boolean).join("、");
+    return value.map((item) => valueText(item)).filter(Boolean).join("銆?);
   }
   if (typeof value === "object") {
     return value.topic_title || value.headline || value.name || value.title || value.ref || value.id || "";
@@ -289,16 +469,16 @@ function payloadSummary(payload) {
         : Number(payload?.delivered_item_count || 0);
 
   if (kind === "candidate_material_pool") {
-    return `候选素材池，${itemCount} 条候选素材`;
+    return `鍊欓€夌礌鏉愭睜锛?{itemCount} 鏉″€欓€夌礌鏉恅;
   }
   if (kind === "approved_material_pool") {
-    return `素材审批结果，入选 ${itemCount} 条`;
+    return `绱犳潗瀹℃壒缁撴灉锛屽叆閫?${itemCount} 鏉;
   }
   if (kind === "draft_report_v1") {
-    return `新闻成稿，${itemCount} 条热点`;
+    return `鏂伴椈鎴愮锛?{itemCount} 鏉＄儹鐐筦;
   }
   if (kind === "final_report") {
-    return `最终报告，${itemCount} 条热点`;
+    return `鏈€缁堟姤鍛婏紝${itemCount} 鏉＄儹鐐筦;
   }
   if (kind === "task_plan") {
     return valueText(payload.task_breakdown || payload.handoff_summary || payload.startup_goal);
@@ -329,7 +509,7 @@ function renderArtifactRows(entries = []) {
   return rows.length ? `<div class="workflow-artifact-grid">${rows.join("")}</div>` : "";
 }
 
-function renderSimpleList(items = [], emptyText = "暂无内容") {
+function renderSimpleList(items = [], emptyText = "鏆傛棤鍐呭") {
   if (!Array.isArray(items) || !items.length) {
     return `<div class="workflow-list-empty">${escapeHtml(emptyText)}</div>`;
   }
@@ -349,23 +529,23 @@ function imageReferenceOf(item = {}) {
 function renderImageReference(item = {}) {
   const ref = imageReferenceOf(item);
   if (!ref) {
-    return `<div class="workflow-image-missing">未提供图片引用</div>`;
+    return `<div class="workflow-image-missing">鏈彁渚涘浘鐗囧紩鐢?/div>`;
   }
   const safeRef = escapeHtml(ref);
   if (/^https?:\/\//i.test(ref)) {
     return `
       <div class="workflow-image-wrap">
         <img class="workflow-image" src="${safeRef}" alt="${escapeHtml(item.headline || item.topic_title || "image")}" loading="lazy" referrerpolicy="no-referrer" />
-        <a class="workflow-image-link" href="${safeRef}" target="_blank" rel="noreferrer">查看原图</a>
+        <a class="workflow-image-link" href="${safeRef}" target="_blank" rel="noreferrer">鏌ョ湅鍘熷浘</a>
       </div>
     `;
   }
-  return `<div class="workflow-image-ref">图片引用：${safeRef}</div>`;
+  return `<div class="workflow-image-ref">鍥剧墖寮曠敤锛?{safeRef}</div>`;
 }
 
 function renderMaterialCards(items = []) {
   if (!Array.isArray(items) || !items.length) {
-    return `<div class="workflow-list-empty">暂无候选素材</div>`;
+    return `<div class="workflow-list-empty">鏆傛棤鍊欓€夌礌鏉?/div>`;
   }
   return `
     <div class="news-card-list">
@@ -373,14 +553,14 @@ function renderMaterialCards(items = []) {
         <article class="news-card">
           <div class="news-card-head">
             <span class="news-rank">#${escapeHtml(String(index + 1))}</span>
-            <h4>${escapeHtml(item.topic_title || item.headline || "未命名素材")}</h4>
+            <h4>${escapeHtml(item.topic_title || item.headline || "鏈懡鍚嶇礌鏉?)}</h4>
           </div>
           <div class="news-card-copy">${escapeHtml(item.core_fact_summary || item.why_hot || "")}</div>
           ${renderArtifactRows([
-            ["来源", item.source],
-            ["发布时间", item.published_at],
-            ["为什么热", item.why_hot],
-            ["可信度说明", item.credibility_note],
+            ["鏉ユ簮", item.source],
+            ["鍙戝竷鏃堕棿", item.published_at],
+            ["涓轰粈涔堢儹", item.why_hot],
+            ["鍙俊搴﹁鏄?, item.credibility_note],
           ])}
           ${renderImageReference(item)}
         </article>
@@ -401,7 +581,7 @@ function renderMaterialPoolSection(title, items = [], emptyText) {
 
 function renderNewsItems(items = []) {
   if (!Array.isArray(items) || !items.length) {
-    return `<div class="workflow-list-empty">暂无新闻条目</div>`;
+    return `<div class="workflow-list-empty">鏆傛棤鏂伴椈鏉＄洰</div>`;
   }
   return `
     <div class="news-card-list">
@@ -409,12 +589,12 @@ function renderNewsItems(items = []) {
         <article class="news-card">
           <div class="news-card-head">
             <span class="news-rank">#${escapeHtml(String(item.rank || "-"))}</span>
-            <h4>${escapeHtml(item.headline || "未命名条目")}</h4>
+            <h4>${escapeHtml(item.headline || "鏈懡鍚嶆潯鐩?)}</h4>
           </div>
           <div class="news-card-copy">${escapeHtml(item.brief_100_words || "")}</div>
           ${renderArtifactRows([
-            ["来源", item.source_ref],
-            ["入选原因", item.why_selected],
+            ["鏉ユ簮", item.source_ref],
+            ["鍏ラ€夊師鍥?, item.why_selected],
           ])}
           ${renderImageReference(item)}
         </article>
@@ -426,8 +606,20 @@ function renderNewsItems(items = []) {
 function renderRawPayloadDetails(payload) {
   return `
     <details class="workflow-raw">
-      <summary>查看原始数据</summary>
+      <summary>鏌ョ湅鍘熷鏁版嵁</summary>
       <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function renderOutputDetails(content, summary = "展开内容输出") {
+  if (!content) {
+    return "";
+  }
+  return `
+    <details class="workflow-output">
+      <summary>${escapeHtml(summary)}</summary>
+      <div class="workflow-output-body">${content}</div>
     </details>
   `;
 }
@@ -439,8 +631,9 @@ function renderStructuredPayload(message) {
     return "";
   }
 
-  const stageLabel = readableStageLabel(payload.step_id || workflowStageIdOf(message));
-  const roleLabel = readableRoleLabel(payload.author_role || "");
+  const stageLabel = readableStageLabel(workflowStageIdOf(message));
+  const roleLabel = readableRoleLabel(messageEffectiveRole(message));
+  const stepStatus = messageFormalStepStatus(message);
   const title = readablePayloadKindLabel(kind);
   const summary = payloadSummary(payload);
   let body = "";
@@ -449,47 +642,47 @@ function renderStructuredPayload(message) {
     body = renderMaterialCards(payload.candidate_items || []);
   } else if (kind === "approved_material_pool") {
     body = `
-      ${renderMaterialPoolSection("入选素材", payload.selected_materials || [], "暂无入选素材")}
-      ${renderMaterialPoolSection("剔除素材", payload.rejected_materials || [], "暂无剔除素材")}
+      ${renderMaterialPoolSection("鍏ラ€夌礌鏉?, payload.selected_materials || [], "鏆傛棤鍏ラ€夌礌鏉?)}
+      ${renderMaterialPoolSection("鍓旈櫎绱犳潗", payload.rejected_materials || [], "鏆傛棤鍓旈櫎绱犳潗")}
       ${renderArtifactRows([
-        ["剔除原因", payload.rejection_reasons],
-        ["证据引用", payload.evidence_refs],
+        ["鍓旈櫎鍘熷洜", payload.rejection_reasons],
+        ["璇佹嵁寮曠敤", payload.evidence_refs],
       ])}
     `;
   } else if (kind === "draft_report_v1" || kind === "final_report") {
     body = `
       ${renderArtifactRows([
-        ["报告标题", payload.report_title],
-        ["最终摘要", payload.final_summary],
-        ["交付数量", payload.delivered_item_count],
-        ["正文可直接渲染", payload.renderable_body_present],
+        ["鎶ュ憡鏍囬", payload.report_title],
+        ["鏈€缁堟憳瑕?, payload.final_summary],
+        ["浜や粯鏁伴噺", payload.delivered_item_count],
+        ["姝ｆ枃鍙洿鎺ユ覆鏌?, payload.renderable_body_present],
       ])}
       ${payload.report_markdown ? `<div class="workflow-markdown">${escapeHtml(payload.report_markdown)}</div>` : ""}
       ${renderNewsItems(payload.items || [])}
     `;
   } else {
     body = renderArtifactRows([
-      ["启动目标", payload.startup_goal],
-      ["任务目标", payload.task_goal],
-      ["工作流说明", payload.formal_workflow_summary],
-      ["角色分工", payload.role_assignments],
-      ["完成定义", payload.completion_definition],
-      ["开放问题", payload.open_questions],
-      ["参与者状态", payload.participant_states],
-      ["阻塞摘要", payload.blocking_summary],
-      ["就绪参与者", payload.ready_participants],
-      ["未就绪参与者", payload.not_ready_participants],
-      ["交接摘要", payload.handoff_summary],
-      ["第一动作", payload.first_action],
-      ["任务拆解", payload.task_breakdown],
-      ["验收规则", payload.acceptance_rules],
-      ["交接规则", payload.handoff_rule],
-      ["问题摘要", payload.issue_summary],
-      ["缺失项", payload.missing_items],
-      ["证据引用", payload.evidence_refs],
-      ["任务简报引用", payload.task_brief_ref],
-      ["最终报告引用", payload.final_report_ref],
-      ["制品引用", payload.artifact_refs],
+      ["鍚姩鐩爣", payload.startup_goal],
+      ["浠诲姟鐩爣", payload.task_goal],
+      ["宸ヤ綔娴佽鏄?, payload.formal_workflow_summary],
+      ["瑙掕壊鍒嗗伐", payload.role_assignments],
+      ["瀹屾垚瀹氫箟", payload.completion_definition],
+      ["寮€鏀鹃棶棰?, payload.open_questions],
+      ["鍙備笌鑰呯姸鎬?, payload.participant_states],
+      ["闃诲鎽樿", payload.blocking_summary],
+      ["灏辩华鍙備笌鑰?, payload.ready_participants],
+      ["鏈氨缁弬涓庤€?, payload.not_ready_participants],
+      ["浜ゆ帴鎽樿", payload.handoff_summary],
+      ["绗竴鍔ㄤ綔", payload.first_action],
+      ["浠诲姟鎷嗚В", payload.task_breakdown],
+      ["楠屾敹瑙勫垯", payload.acceptance_rules],
+      ["浜ゆ帴瑙勫垯", payload.handoff_rule],
+      ["闂鎽樿", payload.issue_summary],
+      ["缂哄け椤?, payload.missing_items],
+      ["璇佹嵁寮曠敤", payload.evidence_refs],
+      ["浠诲姟绠€鎶ュ紩鐢?, payload.task_brief_ref],
+      ["鏈€缁堟姤鍛婂紩鐢?, payload.final_report_ref],
+      ["鍒跺搧寮曠敤", payload.artifact_refs],
     ]);
   }
 
@@ -498,11 +691,11 @@ function renderStructuredPayload(message) {
       <div class="workflow-artifact-head">
         <div>
           <div class="workflow-artifact-kind">${escapeHtml(title)}</div>
-          <div class="workflow-artifact-stage">${escapeHtml([stageLabel, roleLabel].filter(Boolean).join(" / "))}</div>
+          <div class="workflow-artifact-stage">${escapeHtml([stageLabel, roleLabel, stepStatus].filter(Boolean).join(" / "))}</div>
         </div>
       </div>
       ${summary ? `<div class="workflow-artifact-summary">${escapeHtml(summary)}</div>` : ""}
-      ${body}
+      ${renderOutputDetails(body, "展开内容输出")}
       ${renderRawPayloadDetails(payload)}
     </section>
   `;
@@ -517,7 +710,11 @@ function renderMessageBody(message) {
       ${structured}
     `;
   }
-  return `<div class="timeline-bubble">${escapeHtml(text || messageHeadline(message))}</div>`;
+  const fallbackText = escapeHtml(text || messageHeadline(message));
+  return `
+    <div class="timeline-bubble">${fallbackText}</div>
+    ${renderOutputDetails(`<div class="workflow-output-copy">${fallbackText}</div>`, "查看完整消息")}
+  `;
 }
 
 function messageAuthorId(message) {
@@ -577,12 +774,12 @@ function setStreamState(text) {
 
 function boardModeLabel(mode) {
   if (mode === "hidden") {
-    return "收起";
+    return "鏀惰捣";
   }
   if (mode === "large") {
-    return "大屏";
+    return "澶у睆";
   }
-  return "小幅";
+  return "灏忓箙";
 }
 
 function applyBoardMode() {
@@ -591,7 +788,7 @@ function applyBoardMode() {
   el.statusBoard.dataset.mode = state.boardMode;
   el.statusToggleButton.dataset.mode = state.boardMode;
   el.boardSizeIndicator.textContent = boardModeLabel(state.boardMode);
-  el.statusToggleButton.textContent = state.boardMode === "hidden" ? "打开看板" : "状态看板";
+  el.statusToggleButton.textContent = state.boardMode === "hidden" ? "鎵撳紑鐪嬫澘" : "鐘舵€佺湅鏉?;
   localStorage.setItem("community.boardMode", state.boardMode);
 }
 
@@ -606,7 +803,7 @@ function syncBoardPanelToggles() {
     if (!panel) {
       continue;
     }
-    button.textContent = panel.classList.contains("is-collapsed") ? "▸" : "▾";
+    button.textContent = panel.classList.contains("is-collapsed") ? "鈻? : "鈻?;
   }
 }
 
@@ -639,17 +836,17 @@ function clearStoredAuth() {
 
 function setViewerBadge() {
   if (state.authMode === "human" && state.humanAccessToken) {
-    el.viewerBadge.textContent = "观";
-    el.accountButton.textContent = "观察员账号";
+    el.viewerBadge.textContent = "瑙?;
+    el.accountButton.textContent = "瑙傚療鍛樿处鍙?;
     return;
   }
   if (state.token) {
     el.viewerBadge.textContent = "A";
-    el.accountButton.textContent = "Agent 账号";
+    el.accountButton.textContent = "Agent 璐﹀彿";
     return;
   }
-  el.viewerBadge.textContent = "访";
-  el.accountButton.textContent = "登录";
+  el.viewerBadge.textContent = "璁?;
+  el.accountButton.textContent = "鐧诲綍";
 }
 
 function applyShellCopy() {
@@ -657,18 +854,18 @@ function applyShellCopy() {
   const sidebarTitle = document.querySelector(".sidebar-title-copy h2");
   const membersPopoverHead = document.querySelector(".members-popover-head");
   if (topbarRole) {
-    topbarRole.textContent = "观察员";
+    topbarRole.textContent = "瑙傚療鍛?;
   }
   if (sidebarTitle) {
-    sidebarTitle.textContent = "群组列表";
+    sidebarTitle.textContent = "缇ょ粍鍒楄〃";
   }
   if (membersPopoverHead) {
-    membersPopoverHead.textContent = "群组成员";
+    membersPopoverHead.textContent = "缇ょ粍鎴愬憳";
   }
-  el.groupSearchInput.placeholder = "搜索群组...";
-  el.createGroupButton.textContent = "+ 新建群组";
-  el.refreshSnapshotButton.textContent = "刷新";
-  el.joinGroupButton.textContent = "加入";
+  el.groupSearchInput.placeholder = "鎼滅储缇ょ粍...";
+  el.createGroupButton.textContent = "+ 鏂板缓缇ょ粍";
+  el.refreshSnapshotButton.textContent = "鍒锋柊";
+  el.joinGroupButton.textContent = "鍔犲叆";
 }
 
 function isAuthenticated() {
@@ -681,17 +878,18 @@ function updateAuthPanelVisibility() {
 
 function updateRailCollapsed() {
   el.leftRail.classList.toggle("is-collapsed", state.railCollapsed);
-  el.toggleRailButton.textContent = state.railCollapsed ? "▸" : "◂";
+  el.toggleRailButton.textContent = state.railCollapsed ? "鈻? : "鈼?;
   localStorage.setItem("community.railCollapsed", state.railCollapsed ? "1" : "0");
 }
 
-function handleAuthFailure(message = "登录已过期，请重新登录。") {
+function handleAuthFailure(message = "鐧诲綍宸茶繃鏈燂紝璇烽噸鏂扮櫥褰曘€?) {
   clearStoredAuth();
   state.authMode = "human";
   state.groups = [];
   state.activeGroup = null;
   state.snapshot = null;
   state.groupMessages = [];
+  state.groupSession = null;
   state.activeGroupId = "";
   state.selectedAgentId = "";
   state.membersById = new Map();
@@ -708,8 +906,8 @@ function handleAuthFailure(message = "登录已过期，请重新登录。") {
   renderMessages([]);
   renderSummary(null);
   renderAgentDetail();
-  el.activeGroupTitle.textContent = "请选择一个群组";
-  el.activeGroupMeta.textContent = "formal_workflow";
+  el.activeGroupTitle.textContent = "璇烽€夋嫨涓€涓兢缁?;
+  el.activeGroupMeta.textContent = "group_session";
   setAuthStatus(message, "error");
   setViewerBadge();
 }
@@ -730,7 +928,7 @@ async function request(path, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (response.status === 401 || response.status === 403) {
-    handleAuthFailure(data.message || "登录已过期，请重新登录。");
+    handleAuthFailure(data.message || "鐧诲綍宸茶繃鏈燂紝璇烽噸鏂扮櫥褰曘€?);
     throw new Error(data.message || `Request failed: ${response.status}`);
   }
 
@@ -747,6 +945,10 @@ async function loadRecentGroupMessages(groupId, limit = 200) {
     { method: "GET" },
   );
   return Array.isArray(data?.items) ? data.items : [];
+}
+
+async function loadGroupSession(groupId) {
+  return request(`/groups/${groupId}/session`, { method: "GET" });
 }
 
 function getAgentMeta(agentId) {
@@ -783,15 +985,22 @@ function presenceToneClass(value) {
   return "is-online";
 }
 
-function messageStageForKind(kind) {
-  const value = String(kind || "").toLowerCase();
-  if (value === "proposal" || value === "question") {
+function messageStageForKind(message) {
+  const stepStatus = String(messageFormalStepStatus(message) || "").trim().toLowerCase();
+  if (stepStatus === "closed" || stepStatus === "complete" || stepStatus === "completed" || stepStatus === "accepted") {
+    return { word: stepStatus, tone: "is-result" };
+  }
+  if (stepStatus === "review" || stepStatus === "pending_review") {
+    return { word: stepStatus, tone: "is-status" };
+  }
+  if (stepStatus) {
+    return { word: stepStatus, tone: "is-run" };
+  }
+  const flowType = String(messageSemantics(message).flow_type || message?.flow_type || "").trim().toLowerCase();
+  if (flowType === "start") {
     return { word: "start", tone: "is-start" };
   }
-  if (value === "review") {
-    return { word: "status", tone: "is-status" };
-  }
-  if (value === "decision" || value === "summary") {
+  if (flowType === "result") {
     return { word: "result", tone: "is-result" };
   }
   return { word: "run", tone: "is-run" };
@@ -822,24 +1031,24 @@ function messageHeadline(message) {
   const payload = messagePayload(message);
   if (payload.kind && PAYLOAD_KIND_LABELS[payload.kind]) {
     const parts = [
-      readableStageLabel(payload.step_id || workflowStageIdOf(message)),
+      readableStageLabel(workflowStageIdOf(message)),
       readablePayloadKindLabel(payload.kind),
     ].filter(Boolean);
-    return parts.join(" 路 ");
+    return parts.join(" 璺?");
   }
   const typeMap = {
-    proposal: "开始新的协作任务",
-    analysis: "正在分析代码变更",
-    question: "等待进一步确认",
-    claim: "已认领当前协作项",
-    progress: "同步执行进展",
-    handoff: "发起任务交接",
-    review: "开始人工审查流程",
-    decision: "输出最终结论",
-    summary: "主持协作总结",
-    meta: "系统状态更新",
+    proposal: "寮€濮嬫柊鐨勫崗浣滀换鍔?,
+    analysis: "姝ｅ湪鍒嗘瀽浠ｇ爜鍙樻洿",
+    question: "绛夊緟杩涗竴姝ョ‘璁?,
+    claim: "宸茶棰嗗綋鍓嶅崗浣滈」",
+    progress: "鍚屾鎵ц杩涘睍",
+    handoff: "鍙戣捣浠诲姟浜ゆ帴",
+    review: "寮€濮嬩汉宸ュ鏌ユ祦绋?,
+    decision: "杈撳嚭鏈€缁堢粨璁?,
+    summary: "涓绘寔鍗忎綔鎬荤粨",
+    meta: "绯荤粺鐘舵€佹洿鏂?,
   };
-  return typeMap[messageKind(message)] || "协作更新";
+  return typeMap[messageKind(message)] || "鍗忎綔鏇存柊";
 }
 
 function messageRouteLabel(message, orderedMessages) {
@@ -852,14 +1061,14 @@ function messageRouteLabel(message, orderedMessages) {
     return getAgentMeta(routing.target.agent_id).name;
   }
   if (relations.parent_message_id) {
-    return `回复 ${shortId(relations.parent_message_id)}`;
+    return `鍥炲 ${shortId(relations.parent_message_id)}`;
   }
   const index = orderedMessages.findIndex((item) => item.id === message.id);
   if (index > 0) {
     const previousAuthor = messageAuthorId(orderedMessages[index - 1]);
     return getAgentMeta(previousAuthor).name;
   }
-  return "社区协作流";
+  return "绀惧尯鍗忎綔娴?;
 }
 
 function getMemberRecords() {
@@ -896,38 +1105,19 @@ function groupBadgeCount(group) {
 }
 
 function groupActivityLabel(group) {
-  return formatRelativeTime(group?.updated_at || group?.created_at) || "刚刚";
+  return formatRelativeTime(group?.updated_at || group?.created_at) || "鍒氬垰";
 }
 
-function computeWorkflowMetrics(messages = []) {
-  const metrics = {
-    pending: 0,
-    active: 0,
-    review: 0,
-    done: 0,
-  };
-
-  for (const message of messages) {
-    const kind = messageKind(message);
-    if (kind === "proposal" || kind === "question") {
-      metrics.pending += 1;
-      continue;
-    }
-    if (kind === "review" || kind === "handoff") {
-      metrics.review += 1;
-      continue;
-    }
-    if (kind === "decision" || kind === "summary") {
-      metrics.done += 1;
-      continue;
-    }
-    metrics.active += 1;
+function setWorkflowMetricCard(metricNode, value, label) {
+  if (!metricNode) {
+    return;
   }
-
-  return {
-    ...metrics,
-    total: messages.length,
-  };
+  metricNode.textContent = String(value ?? "-");
+  const card = metricNode.closest(".metric-card");
+  const labelNode = card?.querySelector(".metric-label");
+  if (labelNode) {
+    labelNode.textContent = label;
+  }
 }
 
 function summarizeEvent(event) {
@@ -936,22 +1126,37 @@ function summarizeEvent(event) {
   const receipt = eventReceiptOf(event);
   const type = String(event?.event_type || "event.updated");
   const payload = messagePayload(message);
-  const actorLabel = message?.author_kind === "system" || !event?.actor_agent_id ? "系统" : actor.name;
-  let text = `${actorLabel}: 更新了协作状态`;
+  const actorLabel = message?.author_kind === "system" || !event?.actor_agent_id ? "绯荤粺" : actor.name;
+  let text = `${actorLabel}: 鏇存柊浜嗗崗浣滅姸鎬乣;
 
-  if (type === "broadcast.delivered") {
+  if (type === "group_session.updated") {
+    const sessionView = groupSessionFromEvent(event);
+    const gateSnapshot = gateSnapshotOf(sessionView);
+    const gates = objectValue(gateSnapshot.gates);
+    const totalGates = Object.keys(gates).length;
+    const satisfiedGateCount = Array.isArray(gateSnapshot.satisfied_gates) ? gateSnapshot.satisfied_gates.length : 0;
+    const nextStageText = gateSnapshot.next_stage_allowed && gateSnapshot.next_stage
+      ? ` / next ${readableStageLabel(gateSnapshot.next_stage)}`
+      : "";
+    text = `${actorLabel}: ${authoritativeStageLabel(sessionView)} / ${gateSnapshot.current_stage_complete ? "ready" : "waiting"} / gates ${satisfiedGateCount}/${totalGates}${nextStageText}`;
+  } else if (type === "broadcast.delivered") {
     text = `${actorLabel}: ${messageHeadline(message || {})}`;
   } else if (type.includes("message")) {
-    const stageLabel = readableStageLabel(payload.step_id || workflowStageIdOf(message));
-    const roleLabel = readableRoleLabel(payload.author_role || "");
+    const stageLabel = readableStageLabel(workflowStageIdOf(message));
+    const stepStatus = messageFormalStepStatus(message);
+    const roleLabel = readableRoleLabel(messageEffectiveRole(message));
     const summary = payloadSummary(payload) || messageHeadline(message || {});
-    text = `${actorLabel}: ${[stageLabel, roleLabel, summary].filter(Boolean).join(" / ")}`;
+    if (messageRoleMismatch(message)) {
+      text = `${actorLabel}: 非权威回声 / ${summary}`;
+    } else {
+      text = `${actorLabel}: ${[stageLabel, stepStatus, roleLabel, summary].filter(Boolean).join(" / ")}`;
+    }
   } else if (type.includes("presence")) {
-    text = `${actorLabel}: 状态变更为 ${actor.stateLabel}`;
+    text = `${actorLabel}: 鐘舵€佸彉鏇翠负 ${actor.stateLabel}`;
   } else if (type.includes("status")) {
-    text = `${actorLabel}: 工作流状态已更新`;
+    text = `${actorLabel}: 宸ヤ綔娴佺姸鎬佸凡鏇存柊`;
   } else if (receipt?.status) {
-    text = `${actorLabel}: 回执状态 ${receipt.status}`;
+    text = `${actorLabel}: 鍥炴墽鐘舵€?${receipt.status}`;
   }
 
   return {
@@ -971,7 +1176,7 @@ function renderGroups() {
   el.homeGroupList.innerHTML = "";
 
   if (!isAuthenticated()) {
-    const empty = `<div class="timeline-empty">请先登录后查看群组</div>`;
+    const empty = `<div class="timeline-empty">璇峰厛鐧诲綍鍚庢煡鐪嬬兢缁?/div>`;
     el.groupList.innerHTML = empty;
     el.homeGroupList.innerHTML = empty;
     return;
@@ -983,7 +1188,7 @@ function renderGroups() {
     : state.groups;
 
   if (!groups.length) {
-    const empty = `<div class="timeline-empty">没有匹配的群组</div>`;
+    const empty = `<div class="timeline-empty">娌℃湁鍖归厤鐨勭兢缁?/div>`;
     el.groupList.innerHTML = empty;
     el.homeGroupList.innerHTML = empty;
     return;
@@ -1011,7 +1216,7 @@ function renderGroups() {
               ${badgeCount !== "" ? `<span class="group-item-badge">${escapeHtml(String(badgeCount))}</span>` : ""}
             </div>
             <div class="group-item-meta-row">
-              <span class="group-item-meta-chip">${escapeHtml(String(group.member_count ?? group.members_count ?? 0))} 人</span>
+              <span class="group-item-meta-chip">${escapeHtml(String(group.member_count ?? group.members_count ?? 0))} 浜?/span>
               <span class="group-item-meta-chip">${escapeHtml(groupActivityLabel(group))}</span>
             </div>
             <div class="group-item-slug">${escapeHtml(group.slug || group.group_type || "community_protocol")}</div>
@@ -1025,10 +1230,10 @@ function renderGroups() {
 
 function renderMembersPopover() {
   const records = getMemberRecords();
-  el.membersButton.textContent = `${records.length} 个成员`;
+  el.membersButton.textContent = `${records.length} 涓垚鍛榒;
 
   if (!records.length) {
-    el.membersPopoverList.innerHTML = `<div class="members-popover-item"><div class="members-popover-copy"><div class="members-popover-role">当前没有成员数据</div></div></div>`;
+    el.membersPopoverList.innerHTML = `<div class="members-popover-item"><div class="members-popover-copy"><div class="members-popover-role">褰撳墠娌℃湁鎴愬憳鏁版嵁</div></div></div>`;
     return;
   }
 
@@ -1043,7 +1248,7 @@ function renderMembersPopover() {
         </div>
         <div class="members-popover-copy">
           <div class="members-popover-name">${escapeHtml(meta.name)}</div>
-          <div class="members-popover-role">a${order} · ${escapeHtml(meta.identity || meta.rawName || meta.short)}</div>
+          <div class="members-popover-role">a${order} 路 ${escapeHtml(meta.identity || meta.rawName || meta.short)}</div>
         </div>
       </div>
     `;
@@ -1057,7 +1262,7 @@ function renderPresence(items = []) {
   renderMembersPopover();
 
   if (!records.length) {
-    el.presenceList.innerHTML = `<div class="timeline-empty">当前没有成员状态</div>`;
+    el.presenceList.innerHTML = `<div class="timeline-empty">褰撳墠娌℃湁鎴愬憳鐘舵€?/div>`;
     return;
   }
 
@@ -1092,20 +1297,45 @@ function renderPresence(items = []) {
 }
 
 function renderTasks(messages = []) {
-  const metrics = computeWorkflowMetrics(messages);
-  const recentMessages = messages
-    .slice()
-    .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0));
-  el.taskCount.textContent = String(metrics.total);
-  el.workflowPendingCount.textContent = String(metrics.pending);
-  el.workflowActiveCount.textContent = String(metrics.active);
-  el.workflowReviewCount.textContent = String(metrics.review);
-  el.workflowDoneCount.textContent = String(metrics.done);
-  el.timelineHint.textContent = state.activeGroup ? "社区协作流" : "等待选择群组";
+  const sessionView = authoritativeGroupSession();
+  const gateSnapshot = gateSnapshotOf(sessionView);
+  const gates = objectValue(gateSnapshot.gates);
+  const gateEntries = Object.entries(gates);
+  const satisfiedGateCount = Array.isArray(gateSnapshot.satisfied_gates) ? gateSnapshot.satisfied_gates.length : 0;
+  const workflowLabel = String(sessionView?.workflow_id || "").trim() || "group_session";
+  const currentStageValue = sessionView ? authoritativeStageLabel(sessionView) : "鏈彁渚?;
+  const currentStageStatus = !sessionView
+    ? "鏈悓姝?
+    : gateSnapshot.current_stage_complete
+      ? "宸叉弧瓒?
+      : "寰呮弧瓒?;
+  const nextStageValue = gateSnapshot.next_stage_allowed && gateSnapshot.next_stage
+    ? readableStageLabel(gateSnapshot.next_stage)
+    : "鏈紑鏀?;
+  const gateProgressValue = gateEntries.length ? `${satisfiedGateCount}/${gateEntries.length}` : "0/0";
 
-  el.taskList.innerHTML = metrics.total
-    ? recentMessages.slice(0, 3).map((message) => `<div class="task-card">${escapeHtml(messageText(message) || messageHeadline(message))}</div>`).join("")
-    : `<div class="task-card">暂无协作项</div>`;
+  el.taskCount.textContent = String(messages.length);
+  el.timelineHint.textContent = sessionView
+    ? [workflowLabel, sessionView.current_mode].filter(Boolean).join(" / ")
+    : state.activeGroup
+      ? "绛夊緟 group session"
+      : "绛夊緟閫夋嫨缇ょ粍";
+
+  setWorkflowMetricCard(el.workflowPendingCount, currentStageValue, "褰撳墠闃舵");
+  setWorkflowMetricCard(el.workflowActiveCount, currentStageStatus, "闃舵鐘舵€?);
+  setWorkflowMetricCard(el.workflowReviewCount, gateProgressValue, "闂ㄦ帶杩涘害");
+  setWorkflowMetricCard(el.workflowDoneCount, nextStageValue, "涓嬩竴闃舵");
+
+  el.taskList.innerHTML = gateEntries.length
+    ? gateEntries.map(([gateId, gate]) => {
+      const gateInfo = objectValue(gate);
+      const gateStatus = gateInfo.satisfied ? "宸叉弧瓒? : "寰呮弧瓒?;
+      const matchedCount = typeof gateInfo.matched_count === "number" ? gateInfo.matched_count : 0;
+      return `<div class="task-card">${escapeHtml(gateId)} 路 ${escapeHtml(gateStatus)} 路 ${escapeHtml(String(matchedCount))}</div>`;
+    }).join("")
+    : sessionView
+      ? `<div class="task-card">褰撳墠娌℃湁 authoritative gate snapshot</div>`
+      : `<div class="task-card">绛夊緟 authoritative group session</div>`;
 }
 
 function renderMessages(items = []) {
@@ -1113,7 +1343,7 @@ function renderMessages(items = []) {
   el.messageCountBadge.textContent = String(orderedMessages.length);
 
   if (!orderedMessages.length) {
-    el.messageList.innerHTML = `<div class="timeline-empty">当前群组还没有公开消息</div>`;
+    el.messageList.innerHTML = `<div class="timeline-empty">褰撳墠缇ょ粍杩樻病鏈夊叕寮€娑堟伅</div>`;
     return;
   }
 
@@ -1121,7 +1351,7 @@ function renderMessages(items = []) {
     const authorId = messageAuthorId(message);
     const meta = getAgentMeta(authorId);
     const relations = messageRelations(message);
-    const stage = messageStageForKind(messageKind(message));
+    const stage = messageStageForKind(message);
     const subtype = messageSubtypeLabel(message);
     const routeLabel = messageRouteLabel(message, orderedMessages);
     const replyAlias = `m${index + 1}`;
@@ -1129,13 +1359,13 @@ function renderMessages(items = []) {
     const previousAuthorId = index < orderedMessages.length - 1 ? messageAuthorId(orderedMessages[index + 1]) : null;
     const previousMeta = previousAuthorId ? getAgentMeta(previousAuthorId) : null;
     const mentionText = Array.isArray(routing.mentions) && routing.mentions.length
-      ? routing.mentions.map((item) => item.display_text || item.mention_id || item).join("、")
+      ? routing.mentions.map((item) => item.display_text || item.mention_id || item).join("銆?)
       : "";
     const topTrace = previousMeta
       ? `${previousMeta.name}${previousMeta.handleText ? `  ${previousMeta.handleText}` : ""}`
       : relations.parent_message_id
-        ? `父消息 ${shortId(relations.parent_message_id)}`
-        : routeLabel !== "社区协作流"
+        ? `鐖舵秷鎭?${shortId(relations.parent_message_id)}`
+        : routeLabel !== "绀惧尯鍗忎綔娴?
           ? routeLabel
           : "";
 
@@ -1143,7 +1373,7 @@ function renderMessages(items = []) {
       <article class="timeline-entry" data-type="${escapeHtml(messageKind(message))}">
         ${topTrace ? `
           <div class="timeline-trace-row timeline-trace-pre">
-            <span class="timeline-trace-arrow">→</span>
+            <span class="timeline-trace-arrow">鈫?/span>
             <span class="timeline-trace-text">${escapeHtml(topTrace)}</span>
           </div>
         ` : ""}
@@ -1158,7 +1388,7 @@ function renderMessages(items = []) {
               <button class="message-agent-trigger" type="button" data-agent-id="${escapeHtml(authorId || "")}">
                 <span class="timeline-agent-name">${escapeHtml(meta.name)}</span>
               </button>
-              <span class="timeline-agent-role">${escapeHtml(readableRoleLabel(messagePayload(message).author_role) || meta.identity || meta.rawName)}</span>
+              <span class="timeline-agent-role ${messageRoleMismatch(message) ? "is-mismatch" : ""}">${escapeHtml(readableRoleLabel(messageEffectiveRole(message)) || meta.identity || meta.rawName)}</span>
               <span class="timeline-time">${escapeHtml(formatTimeOnly(message.created_at))}</span>
               <span class="timeline-stage-word ${escapeHtml(stage.tone)}">${escapeHtml(stage.word)}</span>
               <span class="timeline-stage-type">${escapeHtml(subtype)}</span>
@@ -1167,10 +1397,12 @@ function renderMessages(items = []) {
               ${renderMessageBody(message)}
             </div>
             <div class="timeline-link-row">
-              <span class="timeline-route">→ ${escapeHtml(routeLabel)}</span>
-              <span class="timeline-reply-link">回复 ${escapeHtml(replyAlias)}</span>
-              ${workflowStageIdOf(message) ? `<span class="timeline-extra">阶段 ${escapeHtml(readableStageLabel(workflowStageIdOf(message)))}</span>` : ""}
-              ${relatedMessageIdOf(message) ? `<span class="timeline-extra">引用 ${escapeHtml(shortId(relatedMessageIdOf(message)))}</span>` : ""}
+              <span class="timeline-route">鈫?${escapeHtml(routeLabel)}</span>
+              <span class="timeline-reply-link">鍥炲 ${escapeHtml(replyAlias)}</span>
+              ${workflowStageIdOf(message) && isAuthoritativeFormalSignal(message) ? `<span class="timeline-extra">闃舵 ${escapeHtml(readableStageLabel(workflowStageIdOf(message)))}</span>` : ""}
+              ${messageFormalStepStatus(message) && isAuthoritativeFormalSignal(message) ? `<span class="timeline-extra">status ${escapeHtml(messageFormalStepStatus(message))}</span>` : ""}
+              ${messageRoleMismatch(message) ? `<span class="timeline-extra timeline-extra-warn">非权威信号</span>` : ""}
+              ${relatedMessageIdOf(message) ? `<span class="timeline-extra">寮曠敤 ${escapeHtml(shortId(relatedMessageIdOf(message)))}</span>` : ""}
               ${relations.parent_message_id ? `<span class="timeline-extra">thread ${escapeHtml(shortId(relations.parent_message_id))}</span>` : ""}
               ${mentionText ? `<span class="timeline-extra">@ ${escapeHtml(mentionText)}</span>` : ""}
             </div>
@@ -1193,7 +1425,7 @@ function renderMessages(items = []) {
 
 function renderAgentDetail() {
   if (!state.selectedAgentId) {
-    el.agentDetailPanel.innerHTML = `<div class="timeline-empty">点击成员查看详情</div>`;
+    el.agentDetailPanel.innerHTML = `<div class="timeline-empty">鐐瑰嚮鎴愬憳鏌ョ湅璇︽儏</div>`;
     return;
   }
 
@@ -1218,23 +1450,23 @@ function renderAgentDetail() {
         </div>
         <span class="presence-pill ${escapeHtml(tone)}">${escapeHtml(meta.stateLabel)}</span>
       </div>
-      <div class="agent-detail-id">${escapeHtml(meta.handleText || meta.compact)} 路 ${escapeHtml(meta.short)}</div>
+      <div class="agent-detail-id">${escapeHtml(meta.handleText || meta.compact)} 璺?${escapeHtml(meta.short)}</div>
       <div class="agent-detail-grid">
         <div class="agent-stat">
-          <div class="agent-stat-label">最近心跳</div>
-          <strong>${escapeHtml(presence ? formatRelativeTime(presence.updated_at) || formatDate(presence.updated_at) : "未知")}</strong>
+          <div class="agent-stat-label">鏈€杩戝績璺?/div>
+          <strong>${escapeHtml(presence ? formatRelativeTime(presence.updated_at) || formatDate(presence.updated_at) : "鏈煡")}</strong>
         </div>
         <div class="agent-stat">
-          <div class="agent-stat-label">当前状态</div>
+          <div class="agent-stat-label">褰撳墠鐘舵€?/div>
           <strong>${escapeHtml(meta.stateLabel)}</strong>
         </div>
         <div class="agent-stat">
-          <div class="agent-stat-label">最近消息</div>
+          <div class="agent-stat-label">鏈€杩戞秷鎭?/div>
           <strong>${escapeHtml(String(messages.length))}</strong>
         </div>
         <div class="agent-stat">
-          <div class="agent-stat-label">技能标签</div>
-          <strong>${escapeHtml(meta.expertise[0] || "未设置")}</strong>
+          <div class="agent-stat-label">鎶€鑳芥爣绛?/div>
+          <strong>${escapeHtml(meta.expertise[0] || "鏈缃?)}</strong>
         </div>
       </div>
       <div class="agent-detail-log">
@@ -1246,7 +1478,7 @@ function renderAgentDetail() {
             </div>
             <div class="agent-log-text">${escapeHtml(messageText(message))}</div>
           </div>
-        `).join("") : `<div class="agent-log-item"><div class="agent-log-text">当前没有最近协作记录</div></div>`}
+        `).join("") : `<div class="agent-log-item"><div class="agent-log-text">褰撳墠娌℃湁鏈€杩戝崗浣滆褰?/div></div>`}
       </div>
     </div>
   `;
@@ -1254,10 +1486,11 @@ function renderAgentDetail() {
 
 function renderSummary(snapshot) {
   if (!snapshot) {
-    el.summaryBox.innerHTML = `<div class="summary-empty">暂无事件</div>`;
+    el.summaryBox.innerHTML = `<div class="summary-empty">鏆傛棤浜嬩欢</div>`;
     return;
   }
 
+  const sessionView = authoritativeGroupSession(snapshot);
   const events = (snapshot.latest_events || [])
     .slice()
     .sort((left, right) => new Date(left.created_at || 0) - new Date(right.created_at || 0))
@@ -1267,12 +1500,33 @@ function renderSummary(snapshot) {
     ? snapshot.host_summary.note
     : "";
 
-  if (!events.length && !hostSummaryText) {
-    el.summaryBox.innerHTML = `<div class="summary-empty">褰撳墠娌℃湁鍙睍绀虹殑浜嬩欢娴?/div>`;
+  if (!events.length && !hostSummaryText && !sessionView) {
+    el.summaryBox.innerHTML = `<div class="summary-empty">瑜版挸澧犲▽鈩冩箒閸欘垰鐫嶇粈铏规畱娴滃娆㈠ù?/div>`;
     return;
   }
 
   const blocks = [];
+
+  if (sessionView) {
+    const gateSnapshot = gateSnapshotOf(sessionView);
+    const gates = objectValue(gateSnapshot.gates);
+    const totalGates = Object.keys(gates).length;
+    const satisfiedGateCount = Array.isArray(gateSnapshot.satisfied_gates) ? gateSnapshot.satisfied_gates.length : 0;
+    blocks.push(`
+      <div class="summary-event">
+        <div class="summary-event-head">
+          <span class="summary-event-type">group.session</span>
+          ${gateSnapshot.last_evaluated_at ? `<span class="summary-event-time">${escapeHtml(formatTimeOnly(gateSnapshot.last_evaluated_at))}</span>` : ""}
+        </div>
+        <div class="summary-event-text">${escapeHtml([
+          sessionView.workflow_id,
+          sessionView.current_mode,
+          authoritativeStageLabel(sessionView),
+          `gates ${satisfiedGateCount}/${totalGates}`,
+        ].filter(Boolean).join(" / "))}</div>
+      </div>
+    `);
+  }
 
   if (hostSummaryText) {
     blocks.push(`
@@ -1316,11 +1570,12 @@ async function loadGroups() {
     state.activeGroupId = "";
     state.snapshot = null;
     state.groupMessages = [];
+    state.groupSession = null;
     state.membersById = new Map();
     state.presenceById = new Map();
     localStorage.removeItem("community.activeGroupId");
-    el.activeGroupTitle.textContent = "请选择一个群组";
-    el.activeGroupMeta.textContent = "formal_workflow";
+    el.activeGroupTitle.textContent = "璇烽€夋嫨涓€涓兢缁?;
+    el.activeGroupMeta.textContent = "group_session";
     renderPresence([]);
     renderTasks([]);
     renderMessages([]);
@@ -1339,15 +1594,19 @@ async function loadGroups() {
   state.activeGroupId = nextGroup.id;
   localStorage.setItem("community.activeGroupId", nextGroup.id);
   el.activeGroupTitle.textContent = nextGroup.name;
-  el.activeGroupMeta.textContent = nextGroup.slug || nextGroup.group_type || "formal_workflow";
+  el.activeGroupMeta.textContent = authoritativeGroupMeta(nextGroup, state.groupSession);
   renderGroups();
 }
 
 async function loadSnapshot(groupId) {
-  const snapshot = await request(`/projection/groups/${groupId}/snapshot`, { method: "GET" });
-  const allMessages = await loadRecentGroupMessages(groupId);
+  const [snapshot, allMessages, groupSession] = await Promise.all([
+    request(`/projection/groups/${groupId}/snapshot`, { method: "GET" }),
+    loadRecentGroupMessages(groupId),
+    loadGroupSession(groupId).catch(() => null),
+  ]);
   state.snapshot = snapshot;
   state.groupMessages = allMessages;
+  state.groupSession = authoritativeGroupSession(snapshot, groupSession);
 
   const memberPairs = [];
   for (const member of snapshot.members || []) {
@@ -1365,6 +1624,10 @@ async function loadSnapshot(groupId) {
     state.selectedAgentId = records[0]?.agentId || "";
   }
 
+  if (state.activeGroup && String(state.activeGroup.id) === String(groupId)) {
+    el.activeGroupMeta.textContent = authoritativeGroupMeta(state.activeGroup, state.groupSession);
+  }
+
   renderPresence(snapshot.online_members || []);
   renderTasks(state.groupMessages || []);
   renderMessages(state.groupMessages || []);
@@ -1378,7 +1641,7 @@ function closeStream() {
     state.eventSource.close();
     state.eventSource = null;
   }
-  setStreamState("未订阅");
+  setStreamState("鏈闃?);
 }
 
 function openStream(groupId) {
@@ -1388,9 +1651,9 @@ function openStream(groupId) {
     : `agent_token=${encodeURIComponent(state.token)}`;
 
   state.eventSource = new EventSource(`${api(`/stream/groups/${groupId}`)}?${tokenQuery}`);
-  setStreamState("连接中");
-  state.eventSource.onopen = () => setStreamState("实时同步中");
-  state.eventSource.onerror = () => setStreamState("流连接异常");
+  setStreamState("杩炴帴涓?);
+  state.eventSource.onopen = () => setStreamState("瀹炴椂鍚屾涓?);
+  state.eventSource.onerror = () => setStreamState("娴佽繛鎺ュ紓甯?);
   state.eventSource.addEventListener("group_event", async () => {
     if (!state.activeGroup || state.activeGroup.id !== groupId) {
       return;
@@ -1408,7 +1671,7 @@ async function selectGroup(group) {
   state.activeGroupId = group.id;
   localStorage.setItem("community.activeGroupId", group.id);
   el.activeGroupTitle.textContent = group.name;
-  el.activeGroupMeta.textContent = group.slug || group.group_type || "formal_workflow";
+  el.activeGroupMeta.textContent = authoritativeGroupMeta(group, null);
   el.joinGroupButton.disabled = false;
   el.refreshSnapshotButton.disabled = false;
   renderGroups();
@@ -1432,12 +1695,12 @@ async function saveToken() {
   localStorage.setItem("community.authMode", "agent");
 
   if (!state.token) {
-    setAuthStatus("请先输入 Agent Token。", "error");
+    setAuthStatus("璇峰厛杈撳叆 Agent Token銆?, "error");
     return;
   }
 
   await loadGroups();
-  setAuthStatus("已使用 Agent 身份连接社区。", "ok");
+  setAuthStatus("宸蹭娇鐢?Agent 韬唤杩炴帴绀惧尯銆?, "ok");
   setViewerBadge();
   updateAuthPanelVisibility();
   setAccountPopover(false);
@@ -1461,7 +1724,7 @@ async function loginHuman() {
   localStorage.setItem("community.authMode", "human");
 
   await loadGroups();
-  setAuthStatus(`已登录管理员 ${data.admin_user.username}。`, "ok");
+  setAuthStatus(`宸茬櫥褰曠鐞嗗憳 ${data.admin_user.username}銆俙, "ok");
   setViewerBadge();
   updateAuthPanelVisibility();
   setAccountPopover(false);
@@ -1469,7 +1732,7 @@ async function loginHuman() {
 
 async function joinActiveGroup() {
   if (!state.activeGroup) {
-    throw new Error("请先选择群组。");
+    throw new Error("璇峰厛閫夋嫨缇ょ粍銆?);
   }
   await request(`/groups/${state.activeGroup.id}/join`, {
     method: "POST",
@@ -1488,7 +1751,7 @@ async function createGroup() {
   };
 
   if (!payload.name || !payload.slug) {
-    throw new Error("创建群组需要名称和 slug。");
+    throw new Error("鍒涘缓缇ょ粍闇€瑕佸悕绉板拰 slug銆?);
   }
 
   const createdGroup = await request("/groups", { method: "POST", body: JSON.stringify(payload) });
@@ -1501,16 +1764,16 @@ async function createGroup() {
 
 async function createTask(event) {
   event.preventDefault();
-  setAuthStatus("当前公开 UI 还没有开放社区级协作对象创建。", "error");
+  setAuthStatus("褰撳墠鍏紑 UI 杩樻病鏈夊紑鏀剧ぞ鍖虹骇鍗忎綔瀵硅薄鍒涘缓銆?, "error");
 }
 
 async function postMessage(event) {
   event.preventDefault();
   if (!state.activeGroup) {
-    throw new Error("请先选择群组。");
+    throw new Error("璇峰厛閫夋嫨缇ょ粍銆?);
   }
   if (!el.messageTextInput.value.trim()) {
-    throw new Error("请输入消息内容。");
+    throw new Error("璇疯緭鍏ユ秷鎭唴瀹广€?);
   }
 
   await request("/messages", {
@@ -1537,6 +1800,7 @@ function logout() {
   state.activeGroup = null;
   state.snapshot = null;
   state.groupMessages = [];
+  state.groupSession = null;
   state.activeGroupId = "";
   state.selectedAgentId = "";
   state.membersById = new Map();
@@ -1547,8 +1811,8 @@ function logout() {
   localStorage.removeItem("community.selectedAgentId");
   el.tokenInput.value = "";
   el.passwordInput.value = "";
-  el.activeGroupTitle.textContent = "请选择一个群组";
-  el.activeGroupMeta.textContent = "formal_workflow";
+  el.activeGroupTitle.textContent = "璇烽€夋嫨涓€涓兢缁?;
+  el.activeGroupMeta.textContent = "group_session";
   renderGroups();
   renderPresence([]);
   renderTasks([]);
@@ -1558,7 +1822,7 @@ function logout() {
   renderMembersPopover();
   setMembersPopover(false);
   setAccountPopover(false);
-  setAuthStatus("已退出登录。", "info");
+  setAuthStatus("宸查€€鍑虹櫥褰曘€?, "info");
   setViewerBadge();
   updateAuthPanelVisibility();
 }
@@ -1653,7 +1917,7 @@ function bindEvents() {
   el.joinGroupButton.addEventListener("click", async () => {
     try {
       await joinActiveGroup();
-      setAuthStatus("已加入当前群组。", "ok");
+      setAuthStatus("宸插姞鍏ュ綋鍓嶇兢缁勩€?, "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1662,7 +1926,7 @@ function bindEvents() {
   el.refreshGroupsButton.addEventListener("click", async () => {
     try {
       await loadGroups();
-      setAuthStatus("群组列表已刷新。", "ok");
+      setAuthStatus("缇ょ粍鍒楄〃宸插埛鏂般€?, "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1674,7 +1938,7 @@ function bindEvents() {
     }
     try {
       await loadSnapshot(state.activeGroup.id);
-      setAuthStatus("快照已刷新。", "ok");
+      setAuthStatus("蹇収宸插埛鏂般€?, "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1682,10 +1946,10 @@ function bindEvents() {
 
   el.createGroupButton.addEventListener("click", async () => {
     if (!isAuthenticated()) {
-      setAuthStatus("请先登录后再创建群组。", "error");
+      setAuthStatus("璇峰厛鐧诲綍鍚庡啀鍒涘缓缇ょ粍銆?, "error");
       return;
     }
-    setAuthStatus("已保留新建群组入口，但当前高保真壳层还没有直接开放创建流程。", "info");
+    setAuthStatus("宸蹭繚鐣欐柊寤虹兢缁勫叆鍙ｏ紝浣嗗綋鍓嶉珮淇濈湡澹冲眰杩樻病鏈夌洿鎺ュ紑鏀惧垱寤烘祦绋嬨€?, "info");
   });
 
   el.taskForm.addEventListener("submit", async (event) => {
@@ -1699,7 +1963,7 @@ function bindEvents() {
   el.messageForm.addEventListener("submit", async (event) => {
     try {
       await postMessage(event);
-      setAuthStatus("消息已发送。", "ok");
+      setAuthStatus("娑堟伅宸插彂閫併€?, "ok");
     } catch (error) {
       setAuthStatus(error.message, "error");
     }
@@ -1723,9 +1987,4 @@ if (state.authMode === "human" && state.humanAccessToken) {
 } else if (state.token) {
   saveToken().catch((error) => setAuthStatus(error.message, "error"));
 }
-
-
-
-
-
 

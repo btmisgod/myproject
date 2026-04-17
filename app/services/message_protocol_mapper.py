@@ -81,6 +81,7 @@ def _context_block_from_sources(*sources: Any) -> dict[str, Any]:
 
 def _normalize_legacy(payload: dict[str, Any]) -> dict[str, Any]:
     content = _dict(payload.get("content"))
+    content_payload = _dict(content.get("payload"))
     metadata = _dict(content.get("metadata"))
     extensions = _dict(payload.get("extensions"))
     custom = _dict(extensions.get("custom"))
@@ -89,6 +90,8 @@ def _normalize_legacy(payload: dict[str, Any]) -> dict[str, Any]:
     status_block = _status_block_from_sources(
         payload.get("status_block"),
         content.get("status_block"),
+        content_payload.get("status_block"),
+        content_payload.get("statusBlock"),
         metadata.get("status_block"),
         metadata,
         custom.get("status_block"),
@@ -96,6 +99,8 @@ def _normalize_legacy(payload: dict[str, Any]) -> dict[str, Any]:
     context_block = _context_block_from_sources(
         payload.get("context_block"),
         content.get("context_block"),
+        content_payload.get("context_block"),
+        content_payload.get("contextBlock"),
         metadata.get("context_block"),
         metadata,
         extensions.get("context_block"),
@@ -157,12 +162,15 @@ def normalize_message_to_canonical_v2(payload: dict[str, Any] | None) -> dict[st
     source = _dict(payload)
     if "group_id" in source and "flow_type" in source and "content" in source:
         content = _dict(source.get("content"))
+        content_payload = _dict(content.get("payload"))
         metadata = _dict(content.get("metadata"))
         extensions = _dict(source.get("extensions"))
         custom = _dict(extensions.get("custom"))
         status_block = _status_block_from_sources(
             source.get("status_block"),
             content.get("status_block"),
+            content_payload.get("status_block"),
+            content_payload.get("statusBlock"),
             metadata.get("status_block"),
             metadata,
             custom.get("status_block"),
@@ -170,6 +178,8 @@ def normalize_message_to_canonical_v2(payload: dict[str, Any] | None) -> dict[st
         context_block = _context_block_from_sources(
             source.get("context_block"),
             content.get("context_block"),
+            content_payload.get("context_block"),
+            content_payload.get("contextBlock"),
             metadata.get("context_block"),
             metadata,
             extensions.get("context_block"),
@@ -260,11 +270,22 @@ def canonical_v2_to_storage_payload(canonical: dict[str, Any] | None) -> dict[st
 
 def serialize_message_v2(message: Any) -> dict[str, Any]:
     content = _dict(getattr(message, "content", {}))
+    content_payload = _dict(content.get("payload"))
     semantics = _dict(getattr(message, "semantics_json", {}))
     routing = _dict(getattr(message, "routing_json", {}))
     extensions = _dict(getattr(message, "extensions_json", {}))
-    status_block = _dict(content.get("status_block") or extensions.get("status_block"))
-    context_block = _dict(content.get("context_block") or extensions.get("context_block"))
+    status_block = _dict(
+        content.get("status_block")
+        or content_payload.get("status_block")
+        or content_payload.get("statusBlock")
+        or extensions.get("status_block")
+    )
+    context_block = _dict(
+        content.get("context_block")
+        or content_payload.get("context_block")
+        or content_payload.get("contextBlock")
+        or extensions.get("context_block")
+    )
     return {
         "id": _json_scalar(getattr(message, "id", None)),
         "group_id": _json_scalar(getattr(message, "group_id", None)),

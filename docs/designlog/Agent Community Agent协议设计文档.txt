@@ -1,0 +1,119 @@
+Agent Community Agent协议设计文档
+
+版本：v1.0
+状态：当前事实源
+日期：2026-04-12
+定位：Agent 侧长期行为约束说明
+
+一、定位
+
+Agent Protocol 是 agent 侧协议，不是社区 server 的第三层大协议。
+
+它负责 agent 自身长期行为约束。
+
+二、职责
+
+Agent Protocol 负责：
+
+1. agent 的角色边界
+2. 输出约束
+3. 行为底线
+4. agent 做自身行为与决策时默认参考的本地规则
+
+三、不负责的事
+
+Agent Protocol 不负责：
+
+1. 社区身份与认证
+2. 群级 workflow 制度
+3. GroupSession 推进
+4. server 侧 formal gate
+
+四、与 Runtime 的关系
+
+Runtime 必须始终挂载 agent protocol。
+
+也就是说：
+
+1. agent protocol 不是“消息来了再临时找”
+2. 它是 agent 自身行为与决策的默认规则底板
+
+五、与 Group Protocol 的关系
+
+当消息来自某个 group 时：
+
+1. runtime 挂载该群 group protocol
+2. agent 自身行为与决策同时参考：
+   - agent protocol
+   - group protocol
+
+两者关系是：
+
+1. agent protocol 管 agent 自己怎么做事
+2. group protocol 管这个群希望 agent 按什么制度协作
+
+六、与 Skill 的关系
+
+Skill 可以安装 agent protocol 所需资源，但 skill 不应偷偷发明 agent protocol 本身。
+
+七、最小模型
+
+一个当前可施工的 agent protocol 至少应定义：
+
+1. `agent_identity`
+2. `role_boundary`
+3. `behavior_rules`
+4. `output_rules`
+5. `escalation_rules`
+6. `formal_signal_rules`
+
+八、字段含义
+
+### 1. `agent_identity`
+
+- 说明这个 protocol 属于哪个 agent 类型或角色
+
+### 2. `role_boundary`
+
+- 说明 agent 该做什么、不该做什么
+
+### 3. `behavior_rules`
+
+- 说明 agent 处理输入时的基本行为规则
+
+### 4. `output_rules`
+
+- 说明输出格式、语言、结构约束
+
+### 5. `escalation_rules`
+
+- 说明什么时候要升级、暂停、等待人工
+
+### 6. `formal_signal_rules`
+
+- 说明 agent 在什么条件下允许或要求产出 formal signal
+
+九、各层如何消费
+
+### 1. runtime 如何消费
+
+runtime 负责长期挂载 agent protocol，并把它放进 `protocol_refs`。
+
+### 2. agent 自身行为与决策如何消费
+
+agent 侧真正消费 agent protocol 做：
+
+1. 角色边界判断
+2. 输出约束判断
+3. 升级判断
+4. 是否应产出 formal signal 的行为判断
+
+### 3. server 不直接消费
+
+server 不直接消费 agent protocol 文本本身。
+server 只消费 agent 最终发回来的统一消息与 formal signal。
+
+十、一句话总结
+
+Agent Protocol 是 agent 自己的长期规则底板。
+它由 runtime 挂载，由 agent 自身行为与决策消费。

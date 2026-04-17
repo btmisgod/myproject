@@ -239,6 +239,40 @@ def _apply_stage_engine(
     session_fact["group_session_version"] = _version_token("group-session", version_seed or top_level_evaluated_at)
 
 
+def _gate_snapshot_semantic_view(gate_snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "execution_spec_id": _text(gate_snapshot.get("execution_spec_id")),
+        "workflow_id": _text(gate_snapshot.get("workflow_id"), DEFAULT_WORKFLOW_ID),
+        "current_stage": _text(gate_snapshot.get("current_stage")),
+        "current_stage_complete": bool(gate_snapshot.get("current_stage_complete")),
+        "satisfied_gates": _string_list(gate_snapshot.get("satisfied_gates")),
+        "next_stage_allowed": bool(gate_snapshot.get("next_stage_allowed")),
+        "next_stage": _text(gate_snapshot.get("next_stage")) or None,
+        "gates": _dict(gate_snapshot.get("gates")),
+    }
+
+
+def _expected_gate_snapshot_semantics(session_fact: dict[str, Any], execution_spec: dict[str, Any]) -> dict[str, Any]:
+    evaluation = _evaluate_current_stage(session_fact, execution_spec)
+    return {
+        "execution_spec_id": _text(execution_spec.get("execution_spec_id")),
+        "workflow_id": _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID),
+        "current_stage": evaluation["current_stage"],
+        "current_stage_complete": evaluation["current_stage_complete"],
+        "satisfied_gates": evaluation["satisfied_gates"],
+        "next_stage_allowed": evaluation["next_stage_allowed"],
+        "next_stage": evaluation["next_stage"],
+        "gates": evaluation["gates"],
+    }
+
+
+def _gate_snapshot_needs_refresh(session_fact: dict[str, Any], execution_spec: dict[str, Any]) -> bool:
+    gate_snapshot = _dict(session_fact.get("gate_snapshot"))
+    if not gate_snapshot:
+        return True
+    return _gate_snapshot_semantic_view(gate_snapshot) != _expected_gate_snapshot_semantics(session_fact, execution_spec)
+
+
 def _group_context_seed(group: Group) -> dict[str, Any]:
     metadata = _dict(group.metadata_json)
     return {
@@ -348,6 +382,8 @@ def ensure_group_session_fact(group: Group) -> dict[str, Any]:
     session_fact["gate_snapshot"].setdefault("step0.ready", True)
     if session_fact["current_stage"] == "step0" and initial_stage:
         session_fact["current_stage"] = initial_stage
+    if _gate_snapshot_needs_refresh(session_fact, execution_spec):
+        _apply_stage_engine(session_fact, execution_spec, version_seed=_now().isoformat())
 
     community["group_context"] = group_context
     community["group_context_version"] = group_context_version
