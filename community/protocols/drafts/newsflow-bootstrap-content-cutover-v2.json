@@ -1,0 +1,642 @@
+{
+  "group_protocol": {
+    "protocol_meta": {
+      "protocol_id": "newsflow-bootstrap-content-cutover-v2",
+      "protocol_name": "Newsflow Bootstrap and Content Cutover Draft V2",
+      "protocol_version": "0.3.0-cutover",
+      "status": "cutover_draft",
+      "source_of_truth": "group_protocol"
+    },
+    "members": {
+      "all_agent_ids": [
+        "__MANAGER_AGENT_ID__",
+        "__EDITOR_AGENT_ID__",
+        "__TESTER_AGENT_ID__",
+        "__WORKER_A_AGENT_ID__",
+        "__WORKER_B_AGENT_ID__"
+      ],
+      "manager_agent_id": "__MANAGER_AGENT_ID__",
+      "non_manager_agent_ids": [
+        "__EDITOR_AGENT_ID__",
+        "__TESTER_AGENT_ID__",
+        "__WORKER_A_AGENT_ID__",
+        "__WORKER_B_AGENT_ID__"
+      ],
+      "role_assignments": {
+        "manager": {
+          "agent_id": "__MANAGER_AGENT_ID__",
+          "server_gate_role": "manager",
+          "responsibility": "stage organization, watchdog, final decision, formal close"
+        },
+        "editor": {
+          "agent_id": "__EDITOR_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "compose approved content into the product body"
+        },
+        "tester": {
+          "agent_id": "__TESTER_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "first consumer for collect stage and direct reviewer for worker submissions"
+        },
+        "worker_a": {
+          "agent_id": "__WORKER_A_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "collect politics_economy and technology content"
+        },
+        "worker_b": {
+          "agent_id": "__WORKER_B_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "collect sports and entertainment content"
+        }
+      },
+      "role_rules": {
+        "manager_holds_decision_authority_for_step_transition": true,
+        "manager_has_formal_close_duty_for_every_stage": true,
+        "tester_is_first_consumer_for_collect": true,
+        "tester_may_directly_issue_pass_partial_pass_redo_to_workers": true,
+        "cross_stage_control_must_route_via_manager": true,
+        "peer_behavior_must_not_be_scripted_in_code": true,
+        "text_first_collaboration": true
+      }
+    },
+    "group_identity": {
+      "group_type": "project",
+      "workflow_mode": "bootstrap_plus_content_output",
+      "group_objective": "Run bootstrap and content-output workflow through group dialogue with server-managed stage gates."
+    },
+    "manager_contract": {
+      "created_at_group_creation": true,
+      "default_mutability": "immutable_during_run",
+      "server_to_manager_initialization_only": true,
+      "must_include": [
+        "group_objective",
+        "role_structure",
+        "stage_model",
+        "allowed_manager_control_actions",
+        "exception_and_watchdog_principles"
+      ],
+      "must_not_include": [
+        "peer_agent_behavior_scripts",
+        "worker_tester_editor_reply_templates",
+        "fixed_peer_to_peer_dialogue_playbooks"
+      ]
+    },
+    "workflow": {
+      "formal_workflow": {
+        "workflow_id": "newsflow-bootstrap-content-cutover-v2",
+        "goal": "Pass bootstrap and content-output flow with correct manager contract, tester-first collect consumption, and text-first collaboration.",
+        "design_principles": [
+          "community_is_the_communication_bus",
+          "text_first_collaboration",
+          "server_controls_stage_gates_only",
+          "manager_only_server_initialized_role",
+          "tester_is_first_consumer_for_collect",
+          "old_stage_messages_lose_actionability_after_stage_advance"
+        ],
+        "stages": {
+          "step0": {
+            "owner": "manager",
+            "goal": "Manager establishes the kickoff surface and explains group goal, role structure, and bootstrap overview.",
+            "allowed_manager_actions": [
+              "kickoff",
+              "role_framing",
+              "bootstrap_overview"
+            ],
+            "output": [
+              "step0_public_kickoff"
+            ]
+          },
+          "step1": {
+            "owner": "non_manager_agents",
+            "goal": "Non-manager roles align on task understanding and role boundary.",
+            "allowed_manager_actions": [
+              "alignment_collection",
+              "clarification"
+            ],
+            "output": [
+              "step1_alignment_response"
+            ]
+          },
+          "step2": {
+            "owner": "non_manager_agents",
+            "goal": "Non-manager roles confirm readiness or blocker for the current group task.",
+            "allowed_manager_actions": [
+              "readiness_collection",
+              "watchdog",
+              "blocker_triage"
+            ],
+            "output": [
+              "task_ready_or_blocker"
+            ]
+          },
+          "formal_start": {
+            "owner": "manager",
+            "goal": "Manager formally closes bootstrap and enters the content workflow.",
+            "allowed_manager_actions": [
+              "formal_close"
+            ],
+            "output": [
+              "bootstrap_formal_close"
+            ]
+          },
+          "cycle.start": {
+            "owner": "manager",
+            "goal": "Manager decomposes the cycle task and defines the next-stage goal and acceptance focus.",
+            "allowed_manager_actions": [
+              "task_decomposition",
+              "acceptance_focus_definition",
+              "stage_dispatch"
+            ],
+            "output": [
+              "cycle_task_plan"
+            ]
+          },
+          "material.collect": {
+            "owner": "worker_production_tester_first_consumption_manager_final_decision",
+            "goal": "Workers submit concrete material in group text; tester directly reviews worker submissions; manager remains mostly silent until final decision or watchdog.",
+            "output": [
+              "collect_stage_dialogue"
+            ],
+            "notes": [
+              "Worker submissions must be concrete material or concrete blocker, not pure ACK.",
+              "Tester directly replies to worker with pass, partial_pass, or redo.",
+              "Manager does not act as first-pass reviewer in collect.",
+              "Named artifacts are optional aids, not hard workflow gates."
+            ]
+          },
+          "material.review": {
+            "owner": "tester_direct_review_loop_with_manager_final_decision",
+            "goal": "Tester consolidates review state and manager decides proceed, forced_proceed, pause, fail, resume, or reopen based on tester conclusion.",
+            "output": [
+              "tester_stage_conclusion",
+              "manager_stage_decision"
+            ]
+          },
+          "draft.compose": {
+            "owner": "editor",
+            "goal": "Editor composes the approved content into the product body in group-visible text.",
+            "output": [
+              "product_draft"
+            ]
+          }
+        }
+      }
+    },
+    "stage_actionability_rules": {
+      "after_stage_advance": {
+        "old_stage_messages_keep_visibility": true,
+        "old_stage_messages_lose_actionability": true,
+        "reply_or_quote_of_old_message_does_not_reopen_stage": true,
+        "old_stage_directed_messages_also_default_to_non_actionable": true
+      },
+      "reactivation_actions": {
+        "redo": {
+          "scope": "intra_stage_correction",
+          "target_stage_required": true,
+          "allowed_roles": [
+            "tester",
+            "manager"
+          ]
+        },
+        "resume": {
+          "scope": "resume_current_paused_stage",
+          "target_stage_required": true,
+          "allowed_roles": [
+            "manager"
+          ]
+        },
+        "reopen": {
+          "scope": "reopen_previous_stage_after_advance",
+          "target_stage_required": true,
+          "allowed_roles": [
+            "manager"
+          ]
+        }
+      },
+      "default_silence_roles": {
+        "material.collect": [
+          "editor"
+        ],
+        "material.review": [
+          "editor"
+        ],
+        "draft.compose": [
+          "worker_a",
+          "worker_b"
+        ]
+      },
+      "reopened_stage_restores_original_consumption_chain": true
+    },
+    "execution_spec": {
+      "execution_spec_id": "newsflow-bootstrap-content-cutover-v2",
+      "workflow_id": "newsflow-bootstrap-content-cutover-v2",
+      "initial_stage": "step0",
+      "stage_order": [
+        "step0",
+        "step1",
+        "step2",
+        "formal_start",
+        "cycle.start",
+        "material.collect",
+        "material.review",
+        "draft.compose"
+      ],
+      "stages": {
+        "step0": {
+          "stage_id": "step0",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_step0_done"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "step1"
+        },
+        "step1": {
+          "stage_id": "step1",
+          "allowed_roles": [
+            "manager",
+            "worker"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "peer_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "step1_submitted"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_step1_done"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "peer_done",
+                "min_count": 4,
+                "required_agent_ids": [
+                  "__EDITOR_AGENT_ID__",
+                  "__TESTER_AGENT_ID__",
+                  "__WORKER_A_AGENT_ID__",
+                  "__WORKER_B_AGENT_ID__"
+                ]
+              },
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "step2"
+        },
+        "step2": {
+          "stage_id": "step2",
+          "allowed_roles": [
+            "manager",
+            "worker"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "peer_ready",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "task_ready"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "peer_blocker",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "task_blocked"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_step2_done"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "peer_ready",
+                "min_count": 4,
+                "required_agent_ids": [
+                  "__EDITOR_AGENT_ID__",
+                  "__TESTER_AGENT_ID__",
+                  "__WORKER_A_AGENT_ID__",
+                  "__WORKER_B_AGENT_ID__"
+                ]
+              },
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "formal_start"
+        },
+        "formal_start": {
+          "stage_id": "formal_start",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_formal_start_done"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "cycle.start"
+        },
+        "cycle.start": {
+          "stage_id": "cycle.start",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_cycle_start_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "material.collect"
+        },
+        "material.collect": {
+          "stage_id": "material.collect",
+          "allowed_roles": [
+            "manager",
+            "worker"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "worker_submission",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "worker_collect_submitted"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "tester_review_action",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "tester_collect_pass",
+                "tester_collect_partial_pass",
+                "tester_collect_redo"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "tester_stage_conclusion",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "tester_material_collect_concluded"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_material_collect_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "tester_stage_conclusion",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__TESTER_AGENT_ID__"
+                ]
+              },
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "material.review"
+        },
+        "material.review": {
+          "stage_id": "material.review",
+          "allowed_roles": [
+            "manager",
+            "worker"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "tester_review_action",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "tester_material_review_pass",
+                "tester_material_review_partial_pass",
+                "tester_material_review_redo"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "tester_stage_conclusion",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "tester_material_review_concluded"
+              ],
+              "allowed_roles": [
+                "worker"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_material_review_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "tester_stage_conclusion",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__TESTER_AGENT_ID__"
+                ]
+              },
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "draft.compose"
+        },
+        "draft.compose": {
+          "stage_id": "draft.compose",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_draft_compose_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": null
+        }
+      }
+    },
+    "group_session_seed": {
+      "workflow_id": "newsflow-bootstrap-content-cutover-v2",
+      "current_mode": "bootstrap_plus_content_output",
+      "current_stage": "step0",
+      "gate_snapshot": {
+        "current_stage": "step0"
+      },
+      "state_json": {
+        "cycle_number": 1,
+        "cycle_id": "cycle-001"
+      }
+    },
+    "transition_rules": {
+      "manager_is_single_formal_transition_authority": true,
+      "tester_direct_review_loop_allowed_inside_collect_and_review": true,
+      "plain_text_is_primary_collaboration_surface": true,
+      "old_stage_messages_keep_visibility_but_lose_actionability_after_stage_advance": true,
+      "only_explicit_redo_resume_or_reopen_reactivates_old_stage": true
+    },
+    "communication_rules": {
+      "message_base_type": "text_first_with_embedded_optional_blocks",
+      "plain_text_is_allowed_for_collaboration_and_should_be_primary": true,
+      "formal_transition_requires_manager_status_block": true,
+      "non_control_collaboration_should_remain_public_in_group_timeline": true,
+      "directed_collaboration": {
+        "same_stage_peer_coordination_allowed": true,
+        "cross_stage_control_must_route_via_manager": true,
+        "explicit_target_rule": {
+          "required_when_directing_to_specific_agent": true
+        }
+      }
+    }
+  }
+}
