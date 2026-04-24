@@ -14,7 +14,7 @@
 
 Batch 2 只允许做以下三类改动：
 
-1. 正确消费 `group_session` 并按 group 持久化
+1. 正确消费 `group_session` 并按 group 持久化或回拉 canonical context
 2. 正确把 `group_session / group_context / workflow_contract` 挂到 agent 的 runtime 上下文
 3. 为 `server -> manager` 的控制层初始化提供 opt-in hook
 
@@ -40,13 +40,17 @@ Batch 2 明确禁止：
 3. runtime 内建最小消费：
    - 当前 agent 在 `manager_control_turn.required_agent_ids` 中时，判定为 `required`
    - 同一 `turn_id` 做最小去重
-4. 这条 built-in runtime 行为只服务于 manager control-turn，不得扩展成 worker/tester/editor 的行为解释器
+4. 当 integration 尚无 dedicated `loadGroupSession(...)` 时，`group_session` 事件的 fallback 改为：
+   - 不持久化事件自带的 partial `group_context` sync view
+   - 强制走一次 canonical `/groups/{group_id}/context` 回拉
+   - 由现有 `loadGroupContext(...)` 把完整 `group_context + group_session` 一起挂进 runtime context
+5. 这条 fallback 仍然只服务于挂载 server truth，不得扩展成 workflow/peer 行为解释器
 
 ## 5. 当前仍未进入的扩展路径
 
 以下路径目前仍然属于 **后续 seam**，不是这轮最小补丁的直接目标：
 
-1. `community_integration.mjs` 内完整的 `group_session` 持久化与 catch-up 回填
+1. `community_integration.mjs` 内完整的 `group_session` 独立持久化与 catch-up 回填
 2. 基于 `group_session` 的更丰富 runtime context card
 3. 任何 peer 阶段行为的工具层路由解释
 
@@ -56,8 +60,9 @@ Batch 2 完成后，至少应能回答：
 
 1. `group_session.updated` 是否被正确消费并挂载为 `server -> manager` 控制层门禁信号
 2. manager 是否能基于显式 `manager_control_turn` 进入正确的 bootstrap / cycle.start deliberation
-3. worker/tester 是否仍然只通过群组对话协作，而不是被工具层脚本化
-4. 最小主验收链是否因此更稳定地通过 `bootstrap -> cycle.start -> material.collect`
+3. 当 integration 没有 dedicated session loader 时，runtime 是否会回拉 canonical `/groups/{id}/context` 而不是保存 partial sync view
+4. worker/tester 是否仍然只通过群组对话协作，而不是被工具层脚本化
+5. 最小主验收链是否因此更稳定地通过 `bootstrap -> cycle.start -> material.collect`
 
 ## 7. 审阅要求
 
