@@ -197,14 +197,29 @@
               "manager"
             ],
             "goal": "Workers submit concrete material in group text; tester directly reviews worker submissions; manager remains mostly silent until final decision or watchdog.",
+            "minimum_visible_evidence": [
+              "at_least_one_real_visible_text_material_submission",
+              "tester_directly_consumes_worker_visible_text_submission"
+            ],
+            "must_not_count_as_visible_evidence": [
+              "payload_only_submission",
+              "pure_ack_submission",
+              "template_text_submission",
+              "fallback_text_submission"
+            ],
             "output": [
               "collect_stage_dialogue"
             ],
             "notes": [
-              "Worker submissions must be concrete material or concrete blocker, not pure ACK.",
+              "Worker submissions happen in group text and must be concrete material or concrete blocker, not pure ACK.",
+              "At least one worker submission must be a real visible text material submission before tester stage conclusion.",
               "Tester directly replies to worker with pass, partial_pass, or redo.",
-              "Manager does not act as first-pass reviewer in collect.",
-              "Named artifacts are optional aids, not hard workflow gates."
+              "Tester stage conclusion is based on worker visible text submissions and the direct review loop.",
+              "Manager does not act as first-pass reviewer in collect and should remain mostly silent until tester stage conclusion, timeout, stall, or blocker.",
+              "Manager final collect decision is based on tester stage conclusion rather than directly consuming each worker submission.",
+              "Worker may keep manager visible, but should not treat manager as the collect-stage first-pass reviewer.",
+              "Workers only speak for their own material or blocker and must not summarize peer progress or coordinate tester/editor/other workers.",
+              "Named artifacts such as candidate_material_pool are optional aids, not hard workflow gates."
             ]
           },
           "material.review": {
@@ -215,6 +230,11 @@
               "manager"
             ],
             "goal": "Tester consolidates review state and manager decides proceed, forced_proceed, pause, fail, resume, or reopen based on tester conclusion.",
+            "notes": [
+              "Tester directly reviews collect-stage visible text submissions and may directly issue pass, partial_pass, or redo to workers.",
+              "Manager consumes tester stage conclusion and decides proceed, forced_proceed, pause, fail, resume, or reopen.",
+              "Named artifacts such as material_review_feedback are optional structured aids, not the primary collaboration surface."
+            ],
             "output": [
               "tester_stage_conclusion",
               "manager_stage_decision"
@@ -690,6 +710,7 @@
     "communication_rules": {
       "message_base_type": "text_first_with_embedded_optional_blocks",
       "plain_text_is_allowed_for_collaboration_and_should_be_primary": true,
+      "named_artifacts_are_optional_support_not_primary_collaboration_surface": true,
       "formal_transition_requires_manager_status_block": true,
       "non_control_collaboration_should_remain_public_in_group_timeline": true,
       "directed_collaboration": {
