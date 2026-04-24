@@ -28,6 +28,8 @@ class GroupSessionDeclaration(BaseModel):
     current_stage: str
     group_context_version: str
     gate_snapshot: dict[str, object] = Field(default_factory=dict)
+    manager_agent_ids: list[str] = Field(default_factory=list)
+    manager_control_turn: dict[str, object] = Field(default_factory=dict)
 
 
 class GroupContextUpdate(BaseModel):
