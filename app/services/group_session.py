@@ -266,6 +266,73 @@ def _expected_gate_snapshot_semantics(session_fact: dict[str, Any], execution_sp
     }
 
 
+def _gate_rule_required_agent_ids(gate_rule: dict[str, Any], execution_spec: dict[str, Any]) -> list[str]:
+    explicit_agent_ids = _string_list(_dict(gate_rule).get("required_agent_ids"))
+    if explicit_agent_ids:
+        return explicit_agent_ids
+    role_directory = _dict(execution_spec.get("role_directory"))
+    allowed_roles = _string_list(_dict(gate_rule).get("allowed_roles"))
+    resolved: list[str] = []
+    if "manager" in allowed_roles:
+        for agent_id in _string_list(role_directory.get("manager_agent_ids")):
+            if agent_id not in resolved:
+                resolved.append(agent_id)
+    if "worker" in allowed_roles:
+        for agent_id in _string_list(role_directory.get("worker_agent_ids")):
+            if agent_id not in resolved:
+                resolved.append(agent_id)
+    return resolved
+
+
+def _first_unsatisfied_gate_rule(evaluation: dict[str, Any], execution_spec: dict[str, Any]) -> dict[str, Any]:
+    current_stage = _text(evaluation.get("current_stage"))
+    stage_spec = _dict(_dict(execution_spec.get("stages")).get(current_stage))
+    gates = _dict(evaluation.get("gates"))
+    for raw_gate in _list(stage_spec.get("accepted_status_blocks")):
+        gate_rule = _dict(raw_gate)
+        gate_id = _text(gate_rule.get("gate_id"))
+        if not gate_id:
+            continue
+        gate_info = _dict(gates.get(gate_id))
+        if not gate_info.get("satisfied"):
+            return gate_rule
+    return {}
+
+
+def _manager_control_turn(session_fact: dict[str, Any], execution_spec: dict[str, Any]) -> dict[str, Any]:
+    evaluation = _evaluate_current_stage(session_fact, execution_spec)
+    gate_rule = _first_unsatisfied_gate_rule(evaluation, execution_spec)
+    if not gate_rule:
+        return {}
+    allowed_roles = _string_list(gate_rule.get("allowed_roles"))
+    if "manager" not in allowed_roles:
+        return {}
+    manager_agent_ids = _string_list(_dict(execution_spec.get("role_directory")).get("manager_agent_ids"))
+    required_agent_ids = [
+        agent_id
+        for agent_id in _gate_rule_required_agent_ids(gate_rule, execution_spec)
+        if agent_id in manager_agent_ids
+    ] or manager_agent_ids
+    if not required_agent_ids:
+        return {}
+    gate_id = _text(gate_rule.get("gate_id"))
+    group_session_version = _text(session_fact.get("group_session_version"))
+    current_stage = evaluation["current_stage"]
+    return {
+        "turn_id": f"{current_stage}:{gate_id}:{group_session_version or 'pending'}",
+        "turn_type": "server_manager_control_turn",
+        "workflow_id": _text(execution_spec.get("workflow_id"), DEFAULT_WORKFLOW_ID),
+        "current_stage": current_stage,
+        "gate_id": gate_id,
+        "allowed_roles": ["manager"],
+        "required_agent_ids": required_agent_ids,
+        "lifecycle_phase": _text(gate_rule.get("lifecycle_phase")) or None,
+        "step_statuses": _string_list(gate_rule.get("step_statuses")),
+        "activation_version": group_session_version or None,
+        "reason": "server_manager_control_turn",
+    }
+
+
 def _gate_snapshot_needs_refresh(session_fact: dict[str, Any], execution_spec: dict[str, Any]) -> bool:
     gate_snapshot = _dict(session_fact.get("gate_snapshot"))
     if not gate_snapshot:
@@ -465,6 +532,8 @@ def update_group_session_from_message(
 
 def build_group_session_declaration(group: Group) -> dict[str, Any]:
     session_fact = ensure_group_session_fact(group)
+    execution_spec = group_execution_spec(group)
+    manager_agent_ids = _string_list(_dict(execution_spec.get("role_directory")).get("manager_agent_ids"))
     return {
         "group_id": str(group.id),
         "group_session_id": session_fact["group_session_id"],
@@ -475,6 +544,8 @@ def build_group_session_declaration(group: Group) -> dict[str, Any]:
         "current_stage": session_fact["current_stage"],
         "group_context_version": session_fact["group_context_version"],
         "gate_snapshot": _dict(session_fact.get("gate_snapshot")),
+        "manager_agent_ids": manager_agent_ids,
+        "manager_control_turn": _manager_control_turn(session_fact, execution_spec),
     }
 
 
