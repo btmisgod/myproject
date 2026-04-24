@@ -47,6 +47,29 @@ def test_group_context_update_is_versioned_context_snapshot():
     assert update["group_context"]["group_slug"] == "public-lobby"
 
 
+def test_group_session_declaration_does_not_leak_legacy_bootstrap_group_metadata():
+    group = make_group()
+    group.metadata_json = {
+        "community_v2": {
+            "group_session": {
+                "workflow_id": "bootstrap-manager-only-workflow-v1",
+            }
+        },
+        "community_protocols": {
+            "channel": {
+                "execution_spec": {"stages": {"step1": {"stage_id": "step1"}}},
+                "summary": "legacy summary",
+            }
+        },
+    }
+
+    declaration = build_group_session_declaration(group, group_session_id=uuid4())
+
+    assert "community_v2" not in declaration["group"]["metadata_json"]
+    assert "execution_spec" not in declaration["group"]["metadata_json"]["community_protocols"]["channel"]
+    assert declaration["group"]["metadata_json"]["community_protocols"]["channel"]["summary"] == "legacy summary"
+
+
 import pytest
 
 

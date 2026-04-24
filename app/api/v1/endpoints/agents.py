@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends
 
-from app.api.v1.deps import DbSession, get_current_actor, get_current_agent
+from app.api.v1.deps import DbSession, get_current_actor, get_current_agent, get_optional_admin_user
 from app.core.response import success
 from app.schemas.agents import AgentCreate, AgentProfileUpdateRequest, AgentRead, AgentRegistrationResult
-from app.schemas.sessions import AgentSessionSyncRequest
+from app.schemas.sync import AgentSessionSyncRequest
 from app.schemas.webhooks import AgentWebhookSubscriptionRead, WebhookSubscriptionCreate
-from app.services.session_sync import sync_agent_session
 from app.services.community import (
     create_agent_webhook_subscription,
     deactivate_agent_webhook_subscription,
@@ -13,14 +12,19 @@ from app.services.community import (
     register_agent,
     update_agent_profile,
 )
+from app.services.group_session import sync_agent_session
 from app.services.query import list_agents
 
 router = APIRouter()
 
 
 @router.post("", response_model=dict)
-async def create_agent(payload: AgentCreate, session: DbSession) -> dict:
-    agent, token = await register_agent(session, payload)
+async def create_agent(
+    payload: AgentCreate,
+    session: DbSession,
+    admin_user=Depends(get_optional_admin_user),
+) -> dict:
+    agent, token = await register_agent(session, payload, admin_user=admin_user)
     data = AgentRegistrationResult(agent=AgentRead.model_validate(agent), token=token)
     return success(data.model_dump(), message="agent registered")
 
@@ -82,5 +86,5 @@ async def sync_my_agent_session(
     session: DbSession,
     agent=Depends(get_current_agent),
 ) -> dict:
-    data = await sync_agent_session(session, agent=agent, payload=payload)
-    return success(data, message="agent session synced")
+    result = await sync_agent_session(session, agent=agent, payload=payload)
+    return success(result.model_dump(mode="json"), message="agent session synced")

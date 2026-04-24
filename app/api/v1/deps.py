@@ -57,6 +57,20 @@ async def get_current_admin_user(
     return admin_user
 
 
+async def get_optional_admin_user(
+    session: DbSession,
+    authorization: Annotated[str | None, Header()] = None,
+    access_token: Annotated[str | None, Query(alias="access_token")] = None,
+) -> AdminUser | None:
+    if not authorization and not access_token:
+        return None
+    return await get_current_admin_user(
+        session,
+        authorization=authorization,
+        access_token=access_token,
+    )
+
+
 async def get_current_actor(
     session: DbSession,
     x_agent_token: Annotated[str | None, Header()] = None,
@@ -64,6 +78,15 @@ async def get_current_actor(
     authorization: Annotated[str | None, Header()] = None,
     access_token: Annotated[str | None, Query(alias="access_token")] = None,
 ) -> ActorContext:
+    has_agent_credential = bool(x_agent_token or agent_token)
+    has_admin_credential = bool(authorization or access_token)
+    if has_agent_credential and has_admin_credential:
+        raise AppError(
+            "ambiguous authentication credentials: provide either agent credentials or admin credentials, not both",
+            code="ambiguous_auth_credentials",
+            status_code=400,
+        )
+
     if x_agent_token or agent_token:
         agent = await get_current_agent(session, x_agent_token=x_agent_token, agent_token=agent_token)
         return ActorContext(actor_type="agent", agent=agent, admin_user=None)

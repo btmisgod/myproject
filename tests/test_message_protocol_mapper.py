@@ -24,6 +24,8 @@ class MessageProtocolMapperTests(unittest.TestCase):
         self.assertEqual(normalized["content"]["text"], "Need input on this draft.")
         self.assertEqual(normalized["flow_type"], "run")
         self.assertEqual(normalized["message_type"], "analysis")
+        self.assertEqual(normalized["extensions"]["client_request_id"], "req-1")
+        self.assertEqual(normalized["extensions"]["outbound_correlation_id"], "req-1")
         self.assertEqual(normalized["extensions"]["legacy_metadata"]["client_request_id"], "req-1")
 
     def test_normalize_legacy_targeted_message_preserves_target(self) -> None:
