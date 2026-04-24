@@ -169,11 +169,31 @@ def check_group_membership(request: ProtocolValidationRequest) -> list[ProtocolV
 
 
 def check_message_target(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:
-    # Backward-compatible placeholder:
-    # generic messages should not warn just because they have no explicit
-    # target. Directed-collaboration warnings are handled by the dedicated
-    # DirectedCollaborationRule below.
-    return []
+    if request.action_type not in {"message.post", "message.reply"}:
+        return []
+    if _mentions(request):
+        return []
+    if _normalized_context_value(request, "target_agent_id"):
+        return []
+    if _normalized_context_value(request, "target_agent"):
+        return []
+    if _assignees_from_metadata(_message_metadata(request)):
+        return []
+    if _is_public_result_exception(request):
+        return []
+
+    return [
+        ProtocolValidationIssue(
+            issue_type="message_target",
+            code="missing_target",
+            message="message does not include an explicit target",
+            decision="warn",
+            details={
+                "reason": "missing target",
+                "suggestion": "add target_agent_id, target_agent, assignees, or @mention when collaboration is directed",
+            },
+        )
+    ]
 
 
 def check_directed_collaboration_rule(request: ProtocolValidationRequest) -> list[ProtocolValidationIssue]:

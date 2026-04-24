@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1.deps import DbSession, get_current_actor
 from app.core.response import success
 from app.schemas.common import EventEnvelope
-from app.schemas.groups import GroupCreate, GroupRead, JoinGroupRequest, MembershipRead
+from app.schemas.groups import GroupCreate, JoinGroupRequest, MembershipRead
 from app.schemas.protocols import GroupProtocolUpdateRequest
 from app.schemas.webhooks import WebhookSubscriptionCreate, WebhookSubscriptionRead
 from app.services.community import (
@@ -14,6 +14,7 @@ from app.services.community import (
     deactivate_webhook_subscription,
     get_group_by_slug_or_404,
     get_group_context,
+    get_group_session,
     get_group_protocol,
     join_group,
     require_group_access,
@@ -24,6 +25,19 @@ from app.services.query import list_events, list_group_memberships, list_groups,
 router = APIRouter()
 
 
+def _serialize_group_read(group) -> dict:
+    return {
+        "id": group.id,
+        "name": group.name,
+        "slug": group.slug,
+        "description": group.description,
+        "group_type": group.group_type,
+        "metadata_json": group.metadata_json,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+    }
+
+
 @router.post("", response_model=dict)
 async def create_group_endpoint(
     payload: GroupCreate,
@@ -31,12 +45,12 @@ async def create_group_endpoint(
     actor=Depends(get_current_actor),
 ) -> dict:
     group = await create_group(session, payload, actor.agent)
-    return success(GroupRead.model_validate(group).model_dump(), message="group created")
+    return success(_serialize_group_read(group), message="group created")
 
 
 @router.get("", response_model=dict)
 async def get_groups(session: DbSession, _=Depends(get_current_actor)) -> dict:
-    groups = [GroupRead.model_validate(group).model_dump() for group in await list_groups(session)]
+    groups = [_serialize_group_read(group) for group in await list_groups(session)]
     return success(groups)
 
 
@@ -47,7 +61,7 @@ async def get_group_by_slug(
     _=Depends(get_current_actor),
 ) -> dict:
     group = await get_group_by_slug_or_404(session, slug)
-    return success(GroupRead.model_validate(group).model_dump())
+    return success(_serialize_group_read(group))
 
 
 @router.post("/{group_id}/join", response_model=dict)
@@ -72,9 +86,10 @@ async def join_group_by_slug_endpoint(
     group = await get_group_by_slug_or_404(session, slug)
     _ = payload
     membership = await join_group(session, group.id, actor.agent)
+    group = await get_group_by_slug_or_404(session, slug)
     return success(
         {
-            "group": GroupRead.model_validate(group).model_dump(),
+            "group": _serialize_group_read(group),
             "membership": MembershipRead.model_validate(membership).model_dump(),
         },
         message="joined group",
@@ -111,6 +126,17 @@ async def get_group_context_endpoint(
     return success(await get_group_context(session, group_id, actor))
 
 
+@router.get("/{group_id}/session", response_model=dict)
+async def get_group_session_endpoint(
+    group_id: uuid.UUID,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    return success(await get_group_session(session, group_id, actor))
+
+
+# Deprecated compatibility alias only. Formal server semantics use
+# /groups/{group_id}/context and group_* naming.
 @router.get("/{group_id}/channel-context", response_model=dict)
 async def get_group_channel_context_legacy_endpoint(
     group_id: uuid.UUID,
@@ -130,6 +156,18 @@ async def get_group_context_by_slug_endpoint(
     return success(await get_group_context(session, group.id, actor))
 
 
+@router.get("/by-slug/{slug}/session", response_model=dict)
+async def get_group_session_by_slug_endpoint(
+    slug: str,
+    session: DbSession,
+    actor=Depends(get_current_actor),
+) -> dict:
+    group = await get_group_by_slug_or_404(session, slug)
+    return success(await get_group_session(session, group.id, actor))
+
+
+# Deprecated compatibility alias only. Formal server semantics use
+# /groups/by-slug/{slug}/context and group_* naming.
 @router.get("/by-slug/{slug}/channel-context", response_model=dict)
 async def get_group_channel_context_by_slug_legacy_endpoint(
     slug: str,
@@ -153,7 +191,7 @@ async def patch_group_protocol_endpoint(
         actor=actor,
         group_protocol=payload.group_protocol,
     )
-    return success(GroupRead.model_validate(group).model_dump(), message="group protocol updated")
+    return success(_serialize_group_read(group), message="group protocol updated")
 
 
 @router.get("/{group_id}/members", response_model=dict)

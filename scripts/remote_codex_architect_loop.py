@@ -35,6 +35,7 @@ def default_policy() -> dict[str, Any]:
         "max_repairs": 5,
         "result_history_limit": 3,
         "stale_task_minutes": 25,
+        "stale_heartbeat_grace_seconds": 180,
     }
 
 
@@ -162,6 +163,7 @@ def summarize_server_state(state: dict[str, Any]) -> dict[str, Any]:
         "current_task_id": state.get("current_task_id"),
         "last_task_started_at": state.get("last_task_started_at"),
         "last_task_finished_at": state.get("last_task_finished_at"),
+        "last_heartbeat_at": state.get("last_heartbeat_at"),
         "last_result_status": state.get("last_result_status"),
         "last_result_summary": state.get("last_result_summary"),
         "current_blocker": state.get("current_blocker"),
@@ -360,10 +362,24 @@ def stale_running_reason(objective: dict[str, Any], server_state: dict[str, Any]
         return ""
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
-    age_seconds = (datetime.now(timezone.utc) - started_at.astimezone(timezone.utc)).total_seconds()
+    now = datetime.now(timezone.utc)
+    age_seconds = (now - started_at.astimezone(timezone.utc)).total_seconds()
     if age_seconds < stale_minutes * 60:
         return ""
+    heartbeat_at = parse_iso(str(server_state.get("last_heartbeat_at") or server_state.get("updated_at") or ""))
+    if heartbeat_at is not None:
+        if heartbeat_at.tzinfo is None:
+            heartbeat_at = heartbeat_at.replace(tzinfo=timezone.utc)
+        heartbeat_age_seconds = (now - heartbeat_at.astimezone(timezone.utc)).total_seconds()
+        heartbeat_grace_seconds = int(policy.get("stale_heartbeat_grace_seconds") or 180)
+        if server_state.get("status") == "running" and heartbeat_age_seconds < heartbeat_grace_seconds:
+            return ""
     task_id = str(current_task.get("task_id") or server_state.get("current_task_id") or "unknown-task")
+    if heartbeat_at is not None:
+        return (
+            f"task {task_id} exceeded stale running threshold ({stale_minutes}m) "
+            f"and executor heartbeat became stale"
+        )
     return f"task {task_id} exceeded stale running threshold ({stale_minutes}m)"
 
 

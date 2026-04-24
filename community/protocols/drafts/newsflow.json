@@ -1,0 +1,1343 @@
+{
+  "group_protocol": {
+    "protocol_meta": {
+      "protocol_id": "newsflow-group-protocol-debug-v1",
+      "protocol_name": "Newsflow Group Protocol Debug Draft",
+      "protocol_version": "0.1.0-draft",
+      "status": "debug_draft",
+      "source_of_truth": "group_protocol",
+      "design_priority": "behavior_first_real_collaboration",
+      "deployment_state": "requires_agent_id_binding_before_patch"
+    },
+    "channel": {
+      "channel_type": "project"
+    },
+    "template_binding": {
+      "required_before_patch": true,
+      "notes": [
+        "Replace every __ROLE_AGENT_ID__ placeholder with a real agent id before PATCH /groups/{id}/protocol.",
+        "Current server gate authority still depends on real manager/worker agent id binding.",
+        "This draft is intentionally a protocol template, not a directly runnable final binding."
+      ],
+      "placeholders": {
+        "manager_agent_id": "__MANAGER_AGENT_ID__",
+        "editor_agent_id": "__EDITOR_AGENT_ID__",
+        "tester_agent_id": "__TESTER_AGENT_ID__",
+        "worker_a_agent_id": "__WORKER_A_AGENT_ID__",
+        "worker_b_agent_id": "__WORKER_B_AGENT_ID__"
+      }
+    },
+    "members": {
+      "all_agent_ids": [
+        "__MANAGER_AGENT_ID__",
+        "__EDITOR_AGENT_ID__",
+        "__TESTER_AGENT_ID__",
+        "__WORKER_A_AGENT_ID__",
+        "__WORKER_B_AGENT_ID__"
+      ],
+      "manager_agent_id": "__MANAGER_AGENT_ID__",
+      "worker_agent_ids": [
+        "__EDITOR_AGENT_ID__",
+        "__TESTER_AGENT_ID__",
+        "__WORKER_A_AGENT_ID__",
+        "__WORKER_B_AGENT_ID__"
+      ],
+      "role_rules": {
+        "manager_holds_decision_authority_for_step_transition": true,
+        "manager_has_acceptance_duty_for_every_stage": true,
+        "tester_may_recommend_transition_but_must_route_via_manager": true,
+        "server_formal_gate_role_collapses_non_manager_agents_to_worker_class": true,
+        "stage_internal_peer_coordination_may_happen_directly": true,
+        "cross_stage_control_must_route_via_manager": true,
+        "human_plain_text_applies_next_cycle_only": true,
+        "server_must_not_summarize_human_plain_text": true
+      },
+      "role_assignments": {
+        "manager": {
+          "agent_id": "__MANAGER_AGENT_ID__",
+          "server_gate_role": "manager",
+          "responsibility": "task decomposition, stage dispatch, stage acceptance, formal transition, retrospective, next-cycle optimization prompts"
+        },
+        "editor": {
+          "agent_id": "__EDITOR_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "consume approved material, select, order, layout, publish product body without changing source facts"
+        },
+        "tester": {
+          "agent_id": "__TESTER_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "review material and product, run real web search for product testing and benchmarking, recommend but not directly emit formal transition"
+        },
+        "worker_a": {
+          "agent_id": "__WORKER_A_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "collect politics-economy and technology materials"
+        },
+        "worker_b": {
+          "agent_id": "__WORKER_B_AGENT_ID__",
+          "server_gate_role": "worker",
+          "responsibility": "collect sports and entertainment materials"
+        }
+      }
+    },
+    "group_identity": {
+      "group_type": "project",
+      "workflow_mode": "long_running_multi_cycle_newsflow",
+      "group_objective": "Run a long-lived Newsflow group that repeatedly produces a Chinese hot-news product through real multi-agent collaboration, review, retrospective, and optimization."
+    },
+    "workflow": {
+      "debug_scope": {
+        "current_server_stage_engine_scope": "linear manager-close progression only",
+        "intra_stage_redo_and_partial_pass_handling": "kept inside the current stage until manager emits the formal close signal",
+        "cycle_counter_limit_note": "cycle_number and cycle_id should be restated by manager artifacts during debug because the current server session engine does not yet auto-maintain a full cycle history projection"
+      },
+      "formal_workflow": {
+        "workflow_id": "newsflow-workflow-debug-v1",
+        "goal": "Produce a Chinese news product covering politics-economy, technology, sports, and entertainment. The real test target is not first-cycle quality but whether five agents can complete two cycles with real outputs and retrospective-driven improvement.",
+        "design_principles": [
+          "behavior_first_not_quality_first",
+          "real_outputs_not_template_faking",
+          "manager_decides_stage_goal_and_acceptance_detail_each_cycle",
+          "control_layer_and_content_layer_are_separated",
+          "server_controls_step_progression_only",
+          "all_non_control_communication_should_remain_public_in_group"
+        ],
+        "human_input_rule": {
+          "human_may_post_plain_text_anytime": true,
+          "human_plain_text_is_not_direct_transition_authority": true,
+          "human_plain_text_becomes_manager_input_at_next_cycle_start_only": true,
+          "human_does_not_bypass_manager_to_manage_workers": true,
+          "if_no_human_input_exists_cycle_still_runs": true
+        },
+        "cycle_start_inputs": {
+          "always_include": [
+            "task_goal_prompt_for_this_cycle"
+          ],
+          "carry_forward_when_available": [
+            "previous_retrospective_summary",
+            "previous_agent_optimization_prompts",
+            "raw_human_plain_text_since_previous_cycle_start"
+          ],
+          "server_boundary": [
+            "server stores or exposes raw eligible human text",
+            "server does not summarize, interpret, or rewrite that text into a manager prompt"
+          ]
+        },
+        "product_contract": {
+          "language": "zh-CN",
+          "sections": [
+            "politics_economy",
+            "technology",
+            "sports",
+            "entertainment"
+          ],
+          "target_items_per_section": 10,
+          "main_push_requirement": "3 images + about 200 Chinese characters",
+          "secondary_push_requirement": "1 image + about 100 Chinese characters",
+          "general_push_requirement": "no image + about 50 Chinese characters",
+          "news_time_window": "within last 24 hours",
+          "final_delivery_shape": "one complete final message in the group"
+        },
+        "decision_model": {
+          "intra_stage_correction_actions": [
+            "partial_pass",
+            "redo"
+          ],
+          "stage_closure_actions": [
+            "proceed",
+            "forced_proceed"
+          ],
+          "partial_pass_rule": "two unsuccessful partial-pass revisions escalate to redo inside the same stage",
+          "redo_rule": "redo count above 2 inside the same stage escalates to forced_proceed",
+          "forced_proceed_rule": "forced proceed closes the current stage without waiting for repair and must leave a risk note for retrospective",
+          "server_transition_trigger": "only manager formal stage-close control messages advance the server stage"
+        },
+        "cycle_completion_definition": {
+          "cycle_is_complete_when": "agent.optimization is formally closed by manager",
+          "test_success_for_current_debug": "workflow completes two cycles with real outputs and correct stage behavior, even if early-cycle product quality is poor"
+        },
+        "threading_guidance": {
+          "default_model": "one main thread per cycle",
+          "stage_internal_replies_allowed": true,
+          "related_message_id_should_pin_precise_artifact_relationships": true,
+          "final_report_message_is_cycle_anchor": true
+        },
+        "stages": {
+          "cycle.start": {
+            "owner": "manager",
+            "goal": "Generate the cycle task decomposition and define stage goals, acceptance focus, and handoff expectations for the current cycle.",
+            "input": [
+              "task_goal_prompt",
+              "previous_retrospective_summary",
+              "previous_agent_optimization_prompts",
+              "human_plain_text_since_previous_cycle_start"
+            ],
+            "output": [
+              "cycle_task_plan"
+            ],
+            "notes": [
+              "Manager chooses decomposition granularity.",
+              "Workflow should not hardcode detailed acceptance thresholds here.",
+              "During debug the manager should explicitly state what counts as done for the next stage."
+            ]
+          },
+          "material.collect": {
+            "owner": "worker_a_and_worker_b_under_manager_dispatch",
+            "goal": "Collect real news materials for all four sections using live web search.",
+            "input": [
+              "cycle_task_plan"
+            ],
+            "output": [
+              "candidate_material_pool"
+            ],
+            "notes": [
+              "Worker A handles politics-economy and technology.",
+              "Worker B handles sports and entertainment.",
+              "Tester may begin reviewing as materials arrive.",
+              "Editor cannot consume until all four sections have material results available."
+            ]
+          },
+          "material.review": {
+            "owner": "tester_with_manager_closure",
+            "goal": "Review candidate materials, leave evidence and recommendations, and let manager close the stage.",
+            "input": [
+              "candidate_material_pool"
+            ],
+            "output": [
+              "material_review_feedback",
+              "manager_stage_close_or_intra_stage_correction"
+            ],
+            "notes": [
+              "Tester reviews with reasons and evidence.",
+              "Partial pass and redo stay inside this stage until manager emits the formal close signal.",
+              "There is no backtrack to a separate earlier workflow branch outside this stage."
+            ]
+          },
+          "draft.compose": {
+            "owner": "editor",
+            "goal": "Compose the product draft from approved materials into the final product shape.",
+            "input": [
+              "approved_materials_or_forced_proceed_material_state"
+            ],
+            "output": [
+              "product_draft"
+            ],
+            "notes": [
+              "Editor may select, order, and lay out.",
+              "Editor must not alter source facts.",
+              "If materials are weak, the draft may still be weak and later be handled by proofread, forced proceed, and retrospective."
+            ]
+          },
+          "draft.proofread": {
+            "owner": "tester_with_manager_closure",
+            "goal": "Review the product draft as a product, not as a fresh material collection task.",
+            "input": [
+              "product_draft"
+            ],
+            "output": [
+              "proofread_feedback"
+            ]
+          },
+          "draft.revise": {
+            "owner": "editor",
+            "goal": "Revise the draft according to current-stage feedback without reopening the material-collection phase.",
+            "input": [
+              "proofread_feedback_or_recheck_feedback"
+            ],
+            "output": [
+              "revised_product_draft"
+            ],
+            "notes": [
+              "No cross-stage rollback to material.collect.",
+              "If the draft remains poor, manager may still later forced_proceed and record risk."
+            ]
+          },
+          "draft.recheck": {
+            "owner": "tester_with_manager_closure",
+            "goal": "Recheck the revised draft and either support closure or keep correction inside the same stage loop.",
+            "input": [
+              "revised_product_draft"
+            ],
+            "output": [
+              "recheck_feedback"
+            ]
+          },
+          "publish.decision": {
+            "owner": "manager",
+            "goal": "Decide whether to release the current draft or forced_proceed it into release.",
+            "input": [
+              "latest_recheck_state",
+              "current_risk_record"
+            ],
+            "output": [
+              "publish_decision"
+            ],
+            "notes": [
+              "This stage does not introduce a separate rollback branch.",
+              "If the release gate keeps failing and thresholds are hit, manager should forced_proceed and record the risk."
+            ]
+          },
+          "report.publish": {
+            "owner": "editor_under_manager_release_decision",
+            "goal": "Publish one complete final product message for the cycle.",
+            "input": [
+              "publish_decision"
+            ],
+            "output": [
+              "final_product_message"
+            ]
+          },
+          "product.test": {
+            "owner": "tester",
+            "goal": "Evaluate the already published product from a user-view perspective.",
+            "input": [
+              "final_product_message"
+            ],
+            "output": [
+              "product_test_report"
+            ],
+            "notes": [
+              "This stage does not reopen the current final draft for editing."
+            ]
+          },
+          "product.benchmark": {
+            "owner": "tester",
+            "goal": "Use real web search to compare the published product against external comparable products.",
+            "input": [
+              "final_product_message",
+              "live_web_search_results"
+            ],
+            "output": [
+              "benchmark_report"
+            ]
+          },
+          "product.cross_cycle_compare": {
+            "owner": "tester",
+            "goal": "Compare the published product against the previous cycle when available.",
+            "input": [
+              "final_product_message",
+              "previous_cycle_artifacts_when_available"
+            ],
+            "output": [
+              "cross_cycle_report"
+            ],
+            "notes": [
+              "For cycle 1 the expected result is 'no historical comparison target'."
+            ]
+          },
+          "retrospective.plan": {
+            "owner": "manager",
+            "goal": "Turn reports and execution evidence into a discussion agenda.",
+            "input": [
+              "product_test_report",
+              "benchmark_report",
+              "cross_cycle_report",
+              "execution_evidence"
+            ],
+            "output": [
+              "retrospective_plan"
+            ]
+          },
+          "retrospective.discussion": {
+            "owner": "manager_moderated_group_discussion",
+            "goal": "Run an evidence-based discussion around the agenda.",
+            "input": [
+              "retrospective_plan"
+            ],
+            "output": [
+              "discussion_record"
+            ],
+            "notes": [
+              "Manager decides who needs to speak.",
+              "Not every agent must speak in every cycle."
+            ]
+          },
+          "retrospective.summary": {
+            "owner": "manager",
+            "goal": "Produce the formal retrospective summary and next-cycle requirements.",
+            "input": [
+              "discussion_record"
+            ],
+            "output": [
+              "retrospective_summary"
+            ]
+          },
+          "agent.optimization": {
+            "owner": "manager",
+            "goal": "Issue one next-cycle optimization prompt to each non-manager agent and then to manager itself if desired by the operator.",
+            "input": [
+              "retrospective_summary"
+            ],
+            "output": [
+              "per_agent_optimization_prompts"
+            ],
+            "notes": [
+              "These prompts are meant to be carried into the next cycle.start.",
+              "They should be actionable in spirit but should not be frozen into rigid engine semantics."
+            ]
+          },
+          "product.report": {
+            "owner": "manager",
+            "goal": "Synthesize product-test, benchmark, and cross-cycle evidence into one formal product evaluation report for the current cycle.",
+            "input": [
+              "product_test_report",
+              "benchmark_report",
+              "cross_cycle_report"
+            ],
+            "output": [
+              "product_evaluation_report"
+            ],
+            "notes": [
+              "This stage closes the product-evaluation lane before retrospective planning starts.",
+              "Manager must reference real testing and benchmark evidence rather than generic conclusions."
+            ]
+          },
+          "agent.self_optimize": {
+            "owner": "non_manager_agents_under_manager_collection",
+            "goal": "Let each non-manager agent convert retrospective findings into its own next-cycle execution adjustments.",
+            "input": [
+              "per_agent_optimization_prompts",
+              "retrospective_summary"
+            ],
+            "output": [
+              "per_agent_self_optimization_notes"
+            ],
+            "notes": [
+              "This stage is for agent-specific self-improvement notes, not for direct stage advancement.",
+              "Manager still remains the only formal transition authority."
+            ]
+          },
+          "optimization.rule.apply": {
+            "owner": "manager",
+            "goal": "Turn retrospective and self-optimization outputs into explicit next-cycle optimization rules and then reopen the next cycle.",
+            "input": [
+              "retrospective_summary",
+              "per_agent_self_optimization_notes"
+            ],
+            "output": [
+              "applied_optimization_rules"
+            ],
+            "notes": [
+              "This stage closes the current cycle and feeds rules into the next cycle.start.",
+              "Applied rules must be explicit enough to be carried forward as next-cycle input."
+            ]
+          }
+        }
+      }
+    },
+    "execution_spec": {
+      "execution_spec_id": "newsflow-workflow-debug-execution-spec-v1",
+      "workflow_id": "newsflow-workflow-debug-v1",
+      "initial_stage": "cycle.start",
+      "stage_order": [
+        "cycle.start",
+        "material.collect",
+        "material.review",
+        "draft.compose",
+        "draft.proofread",
+        "draft.revise",
+        "draft.recheck",
+        "publish.decision",
+        "report.publish",
+        "product.test",
+        "product.benchmark",
+        "product.cross_cycle_compare",
+        "product.report",
+        "retrospective.plan",
+        "retrospective.discussion",
+        "retrospective.summary",
+        "agent.optimization",
+        "agent.self_optimize",
+        "optimization.rule.apply"
+      ],
+      "role_directory": {
+        "manager_agent_ids": [
+          "__MANAGER_AGENT_ID__"
+        ],
+        "worker_agent_ids": [
+          "__EDITOR_AGENT_ID__",
+          "__TESTER_AGENT_ID__",
+          "__WORKER_A_AGENT_ID__",
+          "__WORKER_B_AGENT_ID__"
+        ]
+      },
+      "stages": {
+        "cycle.start": {
+          "stage_id": "cycle.start",
+          "semantic_description": "Server advances only when manager formally closes cycle.start after publishing the cycle task plan.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_cycle_start_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_cycle_start_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "material.collect"
+        },
+        "material.collect": {
+          "stage_id": "material.collect",
+          "semantic_description": "Workers collect materials and tester may inspect early, but server advances only when manager closes the stage.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_material_collect_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_material_collect_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "material.review"
+        },
+        "material.review": {
+          "stage_id": "material.review",
+          "semantic_description": "Tester review loops stay inside the stage; server advances only when manager closes the review stage.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_material_review_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_material_review_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "draft.compose"
+        },
+        "draft.compose": {
+          "stage_id": "draft.compose",
+          "semantic_description": "Editor builds the product draft and manager closes the stage after consuming current evidence.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_draft_compose_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_draft_compose_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "draft.proofread"
+        },
+        "draft.proofread": {
+          "stage_id": "draft.proofread",
+          "semantic_description": "Tester proofreads the draft as a product artifact; manager closes the stage when ready to move on.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_draft_proofread_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_draft_proofread_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "draft.revise"
+        },
+        "draft.revise": {
+          "stage_id": "draft.revise",
+          "semantic_description": "Editor revises within the draft lane only; manager closes the stage after revision evidence is sufficient.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_draft_revise_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_draft_revise_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "draft.recheck"
+        },
+        "draft.recheck": {
+          "stage_id": "draft.recheck",
+          "semantic_description": "Manager closes draft.recheck after tester completes the recheck loop for the current draft state.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_draft_recheck_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_draft_recheck_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "publish.decision"
+        },
+        "publish.decision": {
+          "stage_id": "publish.decision",
+          "semantic_description": "Manager closes the release decision stage with proceed or forced_proceed reasoning.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_publish_decision_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_publish_decision_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "report.publish"
+        },
+        "report.publish": {
+          "stage_id": "report.publish",
+          "semantic_description": "Manager closes the publish stage after the final product message is present in the group.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_report_publish_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_report_publish_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "product.test"
+        },
+        "product.test": {
+          "stage_id": "product.test",
+          "semantic_description": "Tester evaluates the published product; manager closes the stage when test evidence is complete.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_product_test_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_product_test_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "product.benchmark"
+        },
+        "product.benchmark": {
+          "stage_id": "product.benchmark",
+          "semantic_description": "Tester runs benchmark work with live web search; manager closes the stage when evidence is sufficient.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_product_benchmark_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_product_benchmark_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "product.cross_cycle_compare"
+        },
+        "product.cross_cycle_compare": {
+          "stage_id": "product.cross_cycle_compare",
+          "semantic_description": "Tester compares against the previous cycle when available; manager closes the stage for retrospective entry.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_product_cross_cycle_compare_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_product_cross_cycle_compare_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "product.report"
+        },
+        "retrospective.plan": {
+          "stage_id": "retrospective.plan",
+          "semantic_description": "Manager turns reports into a retrospective agenda and then closes the plan stage.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_retrospective_plan_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_retrospective_plan_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "retrospective.discussion"
+        },
+        "retrospective.discussion": {
+          "stage_id": "retrospective.discussion",
+          "semantic_description": "Manager moderates the retrospective discussion and closes the stage after collecting sufficient discussion evidence.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_retrospective_discussion_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_retrospective_discussion_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "retrospective.summary"
+        },
+        "retrospective.summary": {
+          "stage_id": "retrospective.summary",
+          "semantic_description": "Manager publishes the formal retrospective summary and closes the stage.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_retrospective_summary_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_retrospective_summary_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "agent.optimization"
+        },
+        "agent.optimization": {
+          "stage_id": "agent.optimization",
+          "semantic_description": "Manager issues next-cycle optimization prompts and closes the cycle, after which server rolls back to cycle.start.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_agent_optimization_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_agent_optimization_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "agent.self_optimize"
+        },
+        "product.report": {
+          "stage_id": "product.report",
+          "semantic_description": "Manager closes the product-report stage after synthesizing product-test, benchmark, and cross-cycle evidence into a formal evaluation report.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_product_report_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_product_report_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "retrospective.plan"
+        },
+        "agent.self_optimize": {
+          "stage_id": "agent.self_optimize",
+          "semantic_description": "Non-manager agents produce self-optimization notes, but server still advances only when manager formally closes the stage.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_agent_self_optimize_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_agent_self_optimize_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "optimization.rule.apply"
+        },
+        "optimization.rule.apply": {
+          "stage_id": "optimization.rule.apply",
+          "semantic_description": "Manager closes the optimization-rule-apply stage after turning retrospective and self-optimization outputs into next-cycle rules.",
+          "allowed_roles": [
+            "manager"
+          ],
+          "accepted_status_blocks": [
+            {
+              "gate_id": "manager_start",
+              "lifecycle_phase": "start",
+              "step_statuses": [
+                "manager_optimization_rule_apply_started"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            },
+            {
+              "gate_id": "manager_done",
+              "lifecycle_phase": "result",
+              "step_statuses": [
+                "manager_optimization_rule_apply_closed"
+              ],
+              "allowed_roles": [
+                "manager"
+              ]
+            }
+          ],
+          "completion_condition": {
+            "all_of": [
+              {
+                "gate_id": "manager_done",
+                "min_count": 1,
+                "required_agent_ids": [
+                  "__MANAGER_AGENT_ID__"
+                ]
+              }
+            ]
+          },
+          "next_stage": "cycle.start"
+        }
+      }
+    },
+    "group_session_seed": {
+      "workflow_id": "newsflow-workflow-debug-v1",
+      "current_mode": "formal_newsflow_debug",
+      "current_stage": "cycle.start",
+      "gate_snapshot": {
+        "current_stage": "cycle.start"
+      },
+      "state_json": {
+        "cycle_number": 1,
+        "cycle_id": "cycle-001",
+        "latest_final_artifact_message_id": null,
+        "latest_forced_proceed_stage_ids": [],
+        "human_plain_text_since_cycle_start": []
+      }
+    },
+    "projection_hints": {
+      "required_views": [
+        "current_stage",
+        "group_context",
+        "group_session",
+        "manager_summary_payloads",
+        "worker_evidence_timeline",
+        "gate_snapshot",
+        "formal_task_artifact_timeline"
+      ],
+      "manager_summary_outputs_should_be_projectable": true,
+      "worker_evidence_may_be_projected_even_when_not_authoritative": true,
+      "final_product_message_should_be_easy_to_anchor_and_replay": true
+    },
+    "transition_rules": {
+      "manager_is_single_formal_transition_authority": true,
+      "tester_recommendations_require_manager_forwarding": true,
+      "plain_text_cannot_replace_manager_formal_signal": true,
+      "worker_inputs_are_evidence_not_transition_gates": true,
+      "forced_proceed_requires_risk_note": true,
+      "cycle_start_must_consume_raw_human_plain_text_not_server_summary": true,
+      "frontend_should_read_server_projection_for_official_stage_state": true
+    },
+    "explicit_non_goals": {
+      "no_server_side_prompt_summarization": true,
+      "no_worker_direct_gate_control": true,
+      "no_cross_stage_backtrack_to_material_collect": true,
+      "no_frontend_direct_stage_advancement_logic": true,
+      "no_hidden_second_workflow_engine_outside_server": true,
+      "no_hardcoded_acceptance_thresholds_inside_workflow_engine": true
+    },
+    "status_block_rules": {
+      "required_fields": [
+        "workflow_id",
+        "step_id",
+        "lifecycle_phase",
+        "author_agent_id",
+        "author_role",
+        "step_status",
+        "related_message_id"
+      ],
+      "recommended_manager_status_block_extensions": [
+        "cycle_id",
+        "cycle_number",
+        "stage_decision",
+        "forced_proceed",
+        "risk_note",
+        "final_artifact_message_id"
+      ],
+      "status_block_payload_location": "content.payload",
+      "manager_control_signals_are_authoritative": true,
+      "worker_evidence_statuses_are_non_authoritative": true,
+      "missing_status_block_means_no_formal_progress_credit": true
+    },
+    "communication_rules": {
+      "message_base_type": "content_plus_embedded_blocks",
+      "embedded_blocks": {
+        "status_block": "workflow_or_evidence_defined",
+        "content_block": "required",
+        "context_block": "system_defined_or_manager_supplied_for_debug"
+      },
+      "primary_flow_types": [
+        "start",
+        "run",
+        "result"
+      ],
+      "plain_text_is_allowed_for_collaboration_but_not_for_formal_transition": true,
+      "formal_transition_requires_manager_status_block": true,
+      "non_control_collaboration_should_be_visible_in_group_timeline": true,
+      "control_messages_may_include_human_readable_body_plus_structured_status_block": true,
+      "directed_collaboration": {
+        "same_stage_peer_coordination_allowed": true,
+        "cross_stage_control_must_route_via_manager": true,
+        "explicit_target_rule": {
+          "required_when_directing_to_specific_agent": true
+        },
+        "public_result_exception": {
+          "allowed": false
+        }
+      }
+    }
+  }
+}
